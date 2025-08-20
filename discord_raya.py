@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Discord Counter Deck Chatbot (GCP VM 배포용)
+Discord Counter Deck Chatbot (Cloudtype/GCP VM 모두 호환)
 
 레포 구성을 위해 필요한 파일:
 
@@ -15,6 +15,7 @@ import os
 import logging
 import traceback
 from typing import List, Dict, Any, Optional
+from urllib.parse import urlencode
 
 import discord
 from discord.ext import commands
@@ -42,7 +43,7 @@ def normalize_team(maybe3: List[Any]) -> List[str]:
     return sorted([_s(x) for x in maybe3 if _s(x)])
 
 # -----------------------------
-# 데이터 로더
+# 데이터 로더 (엑셀/구글 시트 자동 판별)
 # -----------------------------
 REQUIRED_COLUMNS = [
     "방어덱1","방어덱2","방어덱3",
@@ -52,22 +53,67 @@ REQUIRED_COLUMNS = [
     "스킬1.1","스킬2.1","스킬3.1",
 ]
 
+_GS_PREFIX = "https://docs.google.com/spreadsheets/d/"
+
+def _is_google_sheet(path_or_url: str) -> bool:
+    return isinstance(path_or_url, str) and path_or_url.startswith(_GS_PREFIX)
+
+def _extract_sheet_id(sheet_url_or_id: str) -> str:
+    # 전체 URL 또는 ID 지원
+    if _GS_PREFIX in sheet_url_or_id:
+        return sheet_url_or_id.split("/spreadsheets/d/")[1].split("/")[0]
+    return sheet_url_or_id
+
+def _guess_gid_from_url(url: str) -> Optional[int]:
+    # URL 쿼리에 gid=가 있으면 추출 (없으면 None → 첫 탭)
+    if "gid=" in url:
+        try:
+            return int(url.split("gid=")[1].split("&")[0])
+        except Exception:
+            return None
+    return None
+
+def _csv_url_from_sheet(sheet_url_or_id: str, gid: Optional[int]) -> str:
+    sheet_id = _extract_sheet_id(sheet_url_or_id)
+    base = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export"
+    params = {"format": "csv"}
+    if gid is not None:
+        params["gid"] = str(gid)
+    return f"{base}?{urlencode(params)}"
+
 class DataStore:
     def __init__(self, excel_path: str):
-        self.excel_path = excel_path
+        """
+        excel_path:
+          - 로컬/스토리지의 .xlsx 경로
+          - 또는 구글 스프레드시트 URL (공개 '보기' 권한 필요)
+        환경변수:
+          - DATA_SHEET_URL 이 설정되어 있으면 그것을 우선 사용
+          - 없으면 EXCEL_FILE_PATH 사용 (기존 호환)
+        """
+        self.excel_path = os.getenv("DATA_SHEET_URL") or os.getenv("EXCEL_FILE_PATH") or excel_path
         self.df: Optional[pd.DataFrame] = None
 
     def load(self) -> None:
         try:
-            logger.info(f"Loading excel: {self.excel_path}")
-            df = pd.read_excel(self.excel_path)
+            if _is_google_sheet(self.excel_path):
+                gid = _guess_gid_from_url(self.excel_path)
+                csv_url = _csv_url_from_sheet(self.excel_path, gid)
+                logger.info(f"Loading Google Sheet CSV: {csv_url}")
+                df = pd.read_csv(csv_url)  # 필요 시 , dtype=str
+            else:
+                logger.info(f"Loading Excel: {self.excel_path}")
+                df = pd.read_excel(self.excel_path)
+
+            # 필수 컬럼 체크
             missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
             if missing:
-                logger.warning(f"엑셀에 필요한 컬럼이 없습니다: {missing}")
+                logger.warning(f"데이터에 필요한 컬럼이 없습니다: {missing}")
+
             self.df = df
-            logger.info(f"Loaded excel: shape={df.shape}")
+            logger.info(f"Loaded data: shape={df.shape}, columns={list(df.columns)}")
         except Exception:
-            logger.error("엑셀 로드 실패:\n" + traceback.format_exc())
+            logger.error("데이터 로드 실패:\n" + traceback.format_exc())
             self.df = None
 
     def search_counters(self, defense_team_input: List[str]) -> List[Dict[str, Any]]:
@@ -107,7 +153,9 @@ class DataStore:
 # -----------------------------
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN", "")
-EXCEL_FILE = os.getenv("EXCEL_FILE_PATH", "카운터덱.xlsx")
+
+# 기존 EXCEL_FILE_PATH를 계속 지원하면서, DATA_SHEET_URL이 있으면 자동 우선
+EXCEL_FILE = os.getenv("DATA_SHEET_URL") or os.getenv("EXCEL_FILE_PATH", "카운터덱.xlsx")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -142,7 +190,7 @@ async def help_cmd(ctx: commands.Context):
         msg = (
             "**사용법**\n"
             "- `!조합 A, B, C` : 방어덱 A,B,C에 대한 카운터덱을 모두 표시\n"
-            "- `!리로드` : 엑셀을 다시 로드\n"
+            "- `!리로드` : 데이터 소스(엑셀/구글시트)를 다시 로드\n"
             "- `!상태` : 데이터 상태 확인\n"
         )
         await ctx.send(msg)
@@ -168,9 +216,9 @@ async def reload_cmd(ctx: commands.Context):
     try:
         data_store.load()
         if data_store.df is None:
-            await ctx.send("❌ 엑셀 로드 실패. 경로/형식을 확인해주세요.")
+            await ctx.send("❌ 데이터 로드 실패. 경로/형식을 확인해주세요.")
         else:
-            await ctx.send("✅ 엑셀 리로드 완료")
+            await ctx.send("✅ 데이터 리로드 완료")
     except Exception:
         logger.error("!리로드 처리 오류:\n" + traceback.format_exc())
         await ctx.send("⚠️ 리로드 중 오류가 발생했어요.")
@@ -222,8 +270,9 @@ async def on_command_error(ctx: commands.Context, error: Exception):
         logger.error("on_command_error 핸들러 자체 오류:\n" + traceback.format_exc())
 
 if __name__ == "__main__":
+    load_dotenv()
     if not TOKEN:
-        logger.error("DISCORD_TOKEN 이 설정되지 않았습니다 (.env 확인)")
+        logger.error("DISCORD_TOKEN 이 설정되지 않았습니다 (.env/환경변수 확인)")
     else:
         try:
             bot.run(TOKEN)
@@ -243,7 +292,10 @@ python-dotenv>=1.0.1
 .env.example
 ------------
 DISCORD_TOKEN=여기에_디스코드_봇_토큰_입력
+# 엑셀 파일 경로(로컬 또는 마운트)
 EXCEL_FILE_PATH=카운터덱.xlsx
+# 또는 구글 시트 URL (있으면 이 값이 우선)
+DATA_SHEET_URL=
 
 systemd 서비스 파일 (discord-bot.service)
 ---------------------------------------
