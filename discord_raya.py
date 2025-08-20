@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import logging
 import traceback
+import re
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlencode
 
@@ -41,6 +42,15 @@ def _s(val: Any) -> str:
 
 def normalize_team(maybe3: List[Any]) -> List[str]:
     return sorted([_s(x) for x in maybe3 if _s(x)])
+
+def normalize_skills_order(maybe3: List[Any]) -> List[str]:
+    """스킬 순서 비교용: 공백/빈값 제거만 하고 '순서 유지'"""
+    out = []
+    for x in maybe3:
+        s = _s(x)
+        if s:
+            out.append(s)
+    return out
 
 # -----------------------------
 # 데이터 로더 (엑셀/구글 시트 자동 판별)
@@ -116,37 +126,65 @@ class DataStore:
             logger.error("데이터 로드 실패:\n" + traceback.format_exc())
             self.df = None
 
-    def search_counters(self, defense_team_input: List[str]) -> List[Dict[str, Any]]:
-        results: List[Dict[str, Any]] = []
-        try:
-            if self.df is None or self.df.empty:
+    def search_counters(
+    self,
+    defense_team_input: List[str],
+    defense_skills_input: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
+    try:
+        if self.df is None or self.df.empty:
+            return results
+
+        input_sorted = normalize_team(defense_team_input)
+        if len(input_sorted) != 3:
+            return results
+
+        # 방어 스킬 입력이 있으면 순서 유지 비교용으로 정규화
+        want_def_skills = None
+        if defense_skills_input:
+            want_def_skills = normalize_skills_order(defense_skills_input)
+            # 정확히 3개 아니면 무시(혹은 여기서 바로 return [])
+            if len(want_def_skills) != 3:
                 return results
 
-            input_sorted = normalize_team(defense_team_input)
-            if len(input_sorted) != 3:
-                return results
+        for _, row in self.df.iterrows():
+            defense_team = normalize_team([
+                row.get("방어덱1"),
+                row.get("방어덱2"),
+                row.get("방어덱3"),
+            ])
+            if defense_team != input_sorted:
+                continue
 
-            for _, row in self.df.iterrows():
-                defense_team = normalize_team([row.get("방어덱1"), row.get("방어덱2"), row.get("방어덱3")])
-                if defense_team == input_sorted:
-                    counters = {
-                        "선공": _s(row.get("선공")) or "정보 없음",
-                        "조합": [
-                            _s(row.get("공격덱1")),
-                            _s(row.get("공격덱2")),
-                            _s(row.get("공격덱3")),
-                        ],
-                        "스킬": [
-                            _s(row.get("스킬1.1")),
-                            _s(row.get("스킬2.1")),
-                            _s(row.get("스킬3.1")),
-                        ],
-                    }
-                    if any(counters["조합"]) or any(counters["스킬"]):
-                        results.append(counters)
-        except Exception:
-            logger.error("search_counters 오류:\n" + traceback.format_exc())
-        return results
+            # 스킬 필터가 있으면, "스킬1, 스킬2, 스킬3"과 '순서 동일'해야 통과
+            if want_def_skills is not None:
+                row_def_skills = normalize_skills_order([
+                    row.get("스킬1"),
+                    row.get("스킬2"),
+                    row.get("스킬3"),
+                ])
+                if row_def_skills != want_def_skills:
+                    continue
+
+            counters = {
+                "선공": _s(row.get("선공")) or "정보 없음",
+                "조합": [
+                    _s(row.get("공격덱1")),
+                    _s(row.get("공격덱2")),
+                    _s(row.get("공격덱3")),
+                ],
+                "스킬": [
+                    _s(row.get("스킬1.1")),
+                    _s(row.get("스킬2.1")),
+                    _s(row.get("스킬3.1")),
+                ],
+            }
+            if any(counters["조합"]) or any(counters["스킬"]):
+                results.append(counters)
+    except Exception:
+        logger.error("search_counters 오류:\n" + traceback.format_exc())
+    return results
 
 # -----------------------------
 # 디스코드 Bot
@@ -190,6 +228,7 @@ async def help_cmd(ctx: commands.Context):
         msg = (
             "**사용법**\n"
             "- `!조합 A, B, C` : 방어덱 A,B,C에 대한 카운터덱을 모두 표시\n"
+            "- `!조합 A, B, C | 스킬1, 스킬2, 스킬3` : 방어 스킬 순서까지 지정해 정확히 일치하는 카운터만 표시\n"
             "- `!리로드` : 데이터 소스(엑셀/구글시트)를 다시 로드\n"
             "- `!상태` : 데이터 상태 확인\n"
         )
@@ -226,17 +265,47 @@ async def reload_cmd(ctx: commands.Context):
 @bot.command(name="조합")
 async def combo_cmd(ctx: commands.Context, *, args: str = ""):
     try:
-        raw = [x.strip() for x in args.replace("\n", ",").split(",") if x.strip()]
-        if len(raw) != 3:
-            await ctx.send("❌ 캐릭터 3개를 쉼표로 구분해 입력해주세요. 예: `!조합 니아, 델론즈, 스파이크`")
+        # "덱 입력 | 스킬 입력" 형태로 분리 (스킬 파트는 옵션)
+        parts = [p.strip() for p in args.split("|", 1)]
+        team_part = parts[0] if parts else ""
+        skills_part = parts[1] if len(parts) == 2 else ""
+
+        # 팀 파트 파싱
+        raw_team = [x.strip() for x in team_part.replace("\n", ",").split(",") if x.strip()]
+        if len(raw_team) != 3:
+            await ctx.send(
+                "❌ 캐릭터 3개를 쉼표로 구분해 입력해주세요.\n"
+                "예: `!조합 니아, 델론즈, 스파이크`\n"
+                "또는 방어 스킬까지: `!조합 니아, 델론즈, 스파이크 | 스킬A, 스킬B, 스킬C`"
+            )
             return
 
-        results = data_store.search_counters(raw)
+        # 스킬 파트 파싱(옵션)
+        raw_skills: Optional[List[str]] = None
+        if skills_part:
+            tokens = re.split(r"[,\s>→]+", skills_part)
+            raw_skills = [t.strip() for t in tokens if t.strip()]
+            if len(raw_skills) != 3:
+                await ctx.send(
+                    "❌ 방어 스킬은 순서대로 3개를 입력해주세요.\n"
+                    "예: `!조합 니아, 델론즈, 스파이크 | 스킬A, 스킬B, 스킬C`"
+                )
+                return
+
+        # 검색
+        results = data_store.search_counters(raw_team, raw_skills)
+
+        # 결과 메시지
+        team_label = ', '.join(sorted(normalize_team(raw_team)))
+        header = f"🎯 상대 조합: `{team_label}`"
+        if raw_skills:
+            header += f" | 🧩 방어 스킬: `{' → '.join(normalize_skills_order(raw_skills))}`"
+        header += "\n"
+
         if not results:
-            await ctx.send(f"⚠️ `{', '.join(sorted(raw))}` 에 대한 데이터가 없습니다.")
+            await ctx.send(f"⚠️ 조건에 맞는 데이터가 없습니다.\n{header}")
             return
 
-        header = f"🎯 상대 조합: `{', '.join(sorted(normalize_team(raw)))}`\n"
         chunks: List[str] = [header]
         for i, r in enumerate(results, 1):
             combo = ", ".join([x for x in r["조합"] if x]) or "정보 없음"
@@ -295,6 +364,7 @@ DISCORD_TOKEN=여기에_디스코드_봇_토큰_입력
 # 엑셀 파일 경로(로컬 또는 마운트)
 EXCEL_FILE_PATH=카운터덱.xlsx
 # 또는 구글 시트 URL (있으면 이 값이 우선)
+# 예: https://docs.google.com/spreadsheets/d/1fvwkynV3iwMQ-0aa5VEaYDXCuKRGllezCtKK9x9-Yuo/edit?usp=sharing
 DATA_SHEET_URL=
 
 systemd 서비스 파일 (discord-bot.service)
