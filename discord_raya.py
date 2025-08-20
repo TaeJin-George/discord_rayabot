@@ -91,6 +91,7 @@ def _csv_url_from_sheet(sheet_url_or_id: str, gid: Optional[int]) -> str:
         params["gid"] = str(gid)
     return f"{base}?{urlencode(params)}"
 
+
 class DataStore:
     def __init__(self, excel_path: str):
         """
@@ -126,65 +127,65 @@ class DataStore:
             logger.error("데이터 로드 실패:\n" + traceback.format_exc())
             self.df = None
 
-        def search_counters(
-            self,
-            defense_team_input: List[str],
-            defense_skills_input: Optional[List[str]] = None,
-        ) -> List[Dict[str, Any]]:
-            results: List[Dict[str, Any]] = []
-            try:
-                if self.df is None or self.df.empty:
+    def search_counters(
+        self,
+        defense_team_input: List[str],
+        defense_skills_input: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        try:
+            if self.df is None or self.df.empty:
+                return results
+
+            input_sorted = normalize_team(defense_team_input)
+            if len(input_sorted) != 3:
+                return results
+
+            # 방어 스킬 입력이 있으면 순서 유지 비교용으로 정규화
+            want_def_skills = None
+            if defense_skills_input:
+                want_def_skills = normalize_skills_order(defense_skills_input)
+                if len(want_def_skills) != 3:
                     return results
-        
-                input_sorted = normalize_team(defense_team_input)
-                if len(input_sorted) != 3:
-                    return results
-        
-                # 방어 스킬 입력이 있으면 순서 유지 비교용으로 정규화
-                want_def_skills = None
-                if defense_skills_input:
-                    want_def_skills = normalize_skills_order(defense_skills_input)
-                    # 정확히 3개 아니면 무시(혹은 여기서 바로 return [])
-                    if len(want_def_skills) != 3:
-                        return results
-        
-                for _, row in self.df.iterrows():
-                    defense_team = normalize_team([
-                        row.get("방어덱1"),
-                        row.get("방어덱2"),
-                        row.get("방어덱3"),
+
+            for _, row in self.df.iterrows():
+                defense_team = normalize_team([
+                    row.get("방어덱1"),
+                    row.get("방어덱2"),
+                    row.get("방어덱3"),
+                ])
+                if defense_team != input_sorted:
+                    continue
+
+                # 스킬 필터(순서 동일)
+                if want_def_skills is not None:
+                    row_def_skills = normalize_skills_order([
+                        row.get("스킬1"),
+                        row.get("스킬2"),
+                        row.get("스킬3"),
                     ])
-                    if defense_team != input_sorted:
+                    if row_def_skills != want_def_skills:
                         continue
-        
-                    # 스킬 필터가 있으면, "스킬1, 스킬2, 스킬3"과 '순서 동일'해야 통과
-                    if want_def_skills is not None:
-                        row_def_skills = normalize_skills_order([
-                            row.get("스킬1"),
-                            row.get("스킬2"),
-                            row.get("스킬3"),
-                        ])
-                        if row_def_skills != want_def_skills:
-                            continue
-        
-                    counters = {
-                        "선공": _s(row.get("선공")) or "정보 없음",
-                        "조합": [
-                            _s(row.get("공격덱1")),
-                            _s(row.get("공격덱2")),
-                            _s(row.get("공격덱3")),
-                        ],
-                        "스킬": [
-                            _s(row.get("스킬1.1")),
-                            _s(row.get("스킬2.1")),
-                            _s(row.get("스킬3.1")),
-                        ],
-                    }
-                    if any(counters["조합"]) or any(counters["스킬"]):
-                        results.append(counters)
-            except Exception:
-                logger.error("search_counters 오류:\n" + traceback.format_exc())
-            return results
+
+                counters = {
+                    "선공": _s(row.get("선공")) or "정보 없음",
+                    "조합": [
+                        _s(row.get("공격덱1")),
+                        _s(row.get("공격덱2")),
+                        _s(row.get("공격덱3")),
+                    ],
+                    "스킬": [
+                        _s(row.get("스킬1.1")),
+                        _s(row.get("스킬2.1")),
+                        _s(row.get("스킬3.1")),
+                    ],
+                }
+                if any(counters["조합"]) or any(counters["스킬"]):
+                    results.append(counters)
+        except Exception:
+            logger.error("search_counters 오류:\n" + traceback.format_exc())
+        return results
+
 
 # -----------------------------
 # 디스코드 Bot
