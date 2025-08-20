@@ -52,6 +52,21 @@ def normalize_skills_order(maybe3: List[Any]) -> List[str]:
             out.append(s)
     return out
 
+def s_no_strip(val: Any) -> str:
+    if pd.isna(val):
+        return ""
+    return str(val)  # <-- strip() 하지 않음
+
+def team_exact(maybe3: List[Any]) -> List[str]:
+    # 공백 포함 그대로, 정렬만
+    vals = [s_no_strip(x) for x in maybe3 if s_no_strip(x) != ""]
+    return sorted(vals)
+
+def skills_order_exact(maybe3: List[Any]) -> List[str]:
+    # 순서 유지, 공백 그대로
+    return [s_no_strip(x) for x in maybe3 if s_no_strip(x) != ""]
+
+
 # -----------------------------
 # 데이터 로더 (엑셀/구글 시트 자동 판별)
 # -----------------------------
@@ -136,37 +151,37 @@ class DataStore:
         try:
             if self.df is None or self.df.empty:
                 return results
-
-            input_sorted = normalize_team(defense_team_input)
+    
+            # 입력 덱: 공백 보존, 정렬만
+            input_sorted = team_exact(defense_team_input)
             if len(input_sorted) != 3:
                 return results
-
-            # 방어 스킬 입력이 있으면 순서 유지 비교용으로 정규화
+    
+            # 입력 스킬: 공백 보존, 순서 유지
             want_def_skills = None
             if defense_skills_input:
-                want_def_skills = normalize_skills_order(defense_skills_input)
+                want_def_skills = skills_order_exact(defense_skills_input)
                 if len(want_def_skills) != 3:
                     return results
-
+    
             for _, row in self.df.iterrows():
-                defense_team = normalize_team([
+                defense_team = team_exact([
                     row.get("방어덱1"),
                     row.get("방어덱2"),
                     row.get("방어덱3"),
                 ])
                 if defense_team != input_sorted:
                     continue
-
-                # 스킬 필터(순서 동일)
+    
                 if want_def_skills is not None:
-                    row_def_skills = normalize_skills_order([
+                    row_def_skills = skills_order_exact([
                         row.get("스킬1"),
                         row.get("스킬2"),
                         row.get("스킬3"),
                     ])
                     if row_def_skills != want_def_skills:
                         continue
-
+    
                 counters = {
                     "선공": _s(row.get("선공")) or "정보 없음",
                     "조합": [
@@ -185,6 +200,7 @@ class DataStore:
         except Exception:
             logger.error("search_counters 오류:\n" + traceback.format_exc())
         return results
+
 
 
 # -----------------------------
@@ -266,41 +282,31 @@ async def reload_cmd(ctx: commands.Context):
 @bot.command(name="조합")
 async def combo_cmd(ctx: commands.Context, *, args: str = ""):
     try:
-        # "덱 입력 | 스킬 입력" 형태로 분리 (스킬 파트는 옵션)
-        parts = [p.strip() for p in args.split("|", 1)]
-        team_part = parts[0] if parts else ""
-        skills_part = parts[1] if len(parts) == 2 else ""
+        # 쉼표만으로 분리, 공백 보존 (strip 하지 않음)
+        tokens = args.split(",") if args else []
+        count = len(tokens)
 
-        # 팀 파트 파싱
-        raw_team = [x.strip() for x in team_part.replace("\n", ",").split(",") if x.strip()]
-        if len(raw_team) != 3:
+        if count == 3:
+            raw_team = tokens
+            raw_skills = None
+        elif count == 6:
+            raw_team = tokens[:3]
+            raw_skills = tokens[3:]
+        else:
             await ctx.send(
-                "❌ 캐릭터 3개를 쉼표로 구분해 입력해주세요.\n"
-                "예: `!조합 니아, 델론즈, 스파이크`\n"
-                "또는 방어 스킬까지: `!조합 니아, 델론즈, 스파이크 | 스킬A, 스킬B, 스킬C`"
+                "❌ 입력은 쉼표로만 구분해 주세요.\n"
+                "예1) `!조합 A, B, C`\n"
+                "예2) `!조합 A, B, C, 스킬1, 스킬2, 스킬3`"
             )
             return
 
-        # 스킬 파트 파싱(옵션)
-        raw_skills: Optional[List[str]] = None
-        if skills_part:
-            tokens = re.split(r"[,\s>→]+", skills_part)
-            raw_skills = [t.strip() for t in tokens if t.strip()]
-            if len(raw_skills) != 3:
-                await ctx.send(
-                    "❌ 방어 스킬은 순서대로 3개를 입력해주세요.\n"
-                    "예: `!조합 니아, 델론즈, 스파이크 | 스킬A, 스킬B, 스킬C`"
-                )
-                return
-
-        # 검색
         results = data_store.search_counters(raw_team, raw_skills)
 
-        # 결과 메시지
-        team_label = ', '.join(sorted(normalize_team(raw_team)))
+        # 헤더 표시 (보기용은 기존처럼 trim해도 무방)
+        team_label = ', '.join(sorted(team_exact(raw_team)))
         header = f"🎯 상대 조합: `{team_label}`"
         if raw_skills:
-            header += f" | 🧩 방어 스킬: `{' → '.join(normalize_skills_order(raw_skills))}`"
+            header += f" | 🧩 방어 스킬: `{' → '.join(skills_order_exact(raw_skills))}`"
         header += "\n"
 
         if not results:
@@ -324,6 +330,7 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
     except Exception:
         logger.error("!조합 처리 오류:\n" + traceback.format_exc())
         await ctx.send("⚠️ 요청을 처리하는 중 알 수 없는 오류가 발생했어요.")
+
 
 @bot.event
 async def on_command_error(ctx: commands.Context, error: Exception):
