@@ -21,17 +21,9 @@ DEFAULT_INTERVAL_MIN = int(os.getenv("WATCH_INTERVAL_MIN", "3"))
 
 # 세나 리버스 포럼 글 링크 대략 매칭
 # LINK_RE = re.compile(r"https?://forum\.netmarble\.com/sena_rebirth/.+/\d+")
-LINK_RE_NETMARBLE = re.compile(r"^https?://forum\.netmarble\.com/sena_rebirth/.+/\d+")
-# 네이버 라운지는 글 상세가 /post/ 또는 /article/ 패턴을 쓰는 경우가 많음 → 완화 필터
-LINK_RE_NAVER     = re.compile(r"^https?://game\.naver\.com/lounge/sena_rebirth/(?:post|article|board)/.+", re.IGNORECASE)
-
-def _pick_link_re(board_url: str):
-    if "forum.netmarble.com" in board_url:
-        return LINK_RE_NETMARBLE
-    if "game.naver.com" in board_url and "/lounge/sena_rebirth/" in board_url:
-        return LINK_RE_NAVER
-    # 기본은 (보수적으로) 넷마블 정규식
-    return LINK_RE_NETMARBLE
+# LINK_RE = re.compile(r"^https?://forum\.netmarble\.com/sena_rebirth/.+/\d+")
+BOARD_ID_RE = re.compile(r"/list/(\d+)/")
+VIEW_LINK_RE = re.compile(r"^https?://forum\.netmarble\.com/sena_rebirth/view/\d+/\d+$")
 
 # Playwright 사용 가능 여부
 PLAYWRIGHT_OK = True
@@ -79,6 +71,8 @@ class NetmarbleWatcher(commands.Cog):
             except Exception:
                 continue
         return DEFAULT_INTERVAL_MIN
+
+    
 
     async def _send_tail_for_guild(self, guild: discord.Guild) -> int:
         gid = str(guild.id)
@@ -276,52 +270,80 @@ class NetmarbleWatcher(commands.Cog):
         await self._ensure_playwright()
         if not PLAYWRIGHT_OK or not self._browser:
             return []
+    
+        # 목록 URL에서 보드ID 추출 (예: /list/12/1 → 12)
+        m = BOARD_ID_RE.search(url)
+        board_id = m.group(1) if m else None
+    
         page = await self._browser.new_page(user_agent="Mozilla/5.0 (X11; Linux x86_64)")
         try:
             await page.goto(url, wait_until="networkidle", timeout=20000)
+    
+            # ✅ 목록이 그려질 때까지 글 링크가 최소 1개 보일 때 기다리기
+            if board_id:
+                await page.wait_for_selector(f'a[href*="/view/{board_id}/"]', timeout=8000)
+            else:
+                await page.wait_for_selector('a[href*="/view/"]', timeout=8000)
+    
             anchors = await page.eval_on_selector_all(
                 "a",
                 """els => els.map(a => ({href: a.href, text: (a.textContent||'').trim()}))"""
             )
+    
             out, seen = [], set()
             for a in anchors:
-                href = a.get("href") or ""
-                text = a.get("text") or ""
-                link_re = _pick_link_re(url)
-                if link_re.search(href) and text and href not in seen:
+                href = (a.get("href") or "").strip()
+                text = (a.get("text") or "").strip()
+                if not href or not text:
+                    continue
+    
+                # ✅ 같은 보드의 글만: /view/{board_id}/*
+                if board_id and f"/view/{board_id}/" not in href:
+                    continue
+                # 안전하게 전체 패턴도 확인
+                if not VIEW_LINK_RE.match(href):
+                    continue
+    
+                if href not in seen:
                     out.append({"id": href, "title": text, "url": href})
                     seen.add(href)
-                    if len(out) >= 10:
+                    if len(out) >= 12:
                         break
             return out
         finally:
             await page.close()
 
     async def _scrape_with_http(self, url: str) -> List[Dict[str, str]]:
-        # 서버 렌더/프리렌더된 목록에서만 동작. 완전 SPA면 빈 결과일 수 있음.
-        try:
-            async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "Mozilla/5.0"}) as client:
-                r = await client.get(url, follow_redirects=True)
-                r.raise_for_status()
-                soup = BeautifulSoup(r.text, "html.parser")
-                out, seen = [], set()
-                for a in soup.select("a"):
-                    href = (a.get("href") or "").strip()
-                    text = (a.get_text(strip=True) or "")
-                    link_re = _pick_link_re(url)
-                    
-                    if not href:
-                        continue
-                    if href.startswith("/"):
-                        href = f"https://forum.netmarble.com{href}"
-                    if LINK_RE.search(href) and text and href not in seen:
-                        out.append({"id": href, "title": text, "url": href})
-                        seen.add(href)
-                        if len(out) >= 10:
-                            break
-                return out
-        except Exception:
-            return []
+    try:
+        m = BOARD_ID_RE.search(url)
+        board_id = m.group(1) if m else None
+
+        async with httpx.AsyncClient(timeout=15, headers={"User-Agent":"Mozilla/5.0"}) as client:
+            r = await client.get(url, follow_redirects=True)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            out, seen = [], set()
+            for a in soup.select("a[href]"):
+                href = a.get("href", "").strip()
+                text = a.get_text(strip=True)
+                if not href or not text:
+                    continue
+                if href.startswith("/"):
+                    href = f"https://forum.netmarble.com{href}"
+                if board_id and f"/view/{board_id}/" not in href:
+                    continue
+                if not VIEW_LINK_RE.match(href):
+                    continue
+                if href not in seen:
+                    out.append({"id": href, "title": text, "url": href})
+                    seen.add(href)
+                    if len(out) >= 12:
+                        break
+            return out
+    except Exception:
+        return []
+
 
     async def _fetch_items(self, url: str) -> List[Dict[str, str]]:
         items = await self._scrape_with_browser(url)
