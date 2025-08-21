@@ -12,8 +12,6 @@ Discord Counter Deck Chatbot (Cloudtype/GCP VM 모두 호환)
 """
 from __future__ import annotations
 import os
-print("=== 현재 작업 디렉토리:", os.getcwd())
-print("=== 파일 목록:", os.listdir(os.getcwd()))
 import logging
 import traceback
 import re
@@ -24,6 +22,10 @@ import discord
 from discord.ext import commands
 import pandas as pd
 from dotenv import load_dotenv
+
+
+print("=== 현재 작업 디렉토리:", os.getcwd())
+print("=== 파일 목록:", os.listdir(os.getcwd()))
 
 # -----------------------------
 # 로깅 설정
