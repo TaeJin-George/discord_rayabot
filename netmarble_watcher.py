@@ -80,6 +80,64 @@ class NetmarbleWatcher(commands.Cog):
                 continue
         return DEFAULT_INTERVAL_MIN
 
+    async def _send_tail_for_guild(self, guild: discord.Guild) -> int:
+        gid = str(guild.id)
+        g = self.data.setdefault(gid, {})
+    
+        # 여러 채널 지원 코드 쓰는 경우
+        channel_ids: List[int] = g.get("channel_ids") or []
+        legacy = g.get("channel_id")
+        if legacy and legacy not in channel_ids:
+            channel_ids.append(legacy)
+            g["channel_ids"] = channel_ids
+    
+        if not channel_ids:
+            return 0
+    
+        dest_channels: List[discord.abc.MessageableChannel] = []
+        for cid in channel_ids:
+            ch = guild.get_channel(cid)
+            if isinstance(ch, (discord.TextChannel, discord.Thread)):
+                dest_channels.append(ch)
+        if not dest_channels:
+            return 0
+    
+        boards: List[Dict[str, Any]] = g.get("boards", [])
+        if not boards:
+            return 0
+    
+        sent = 0
+        for b in boards:
+            name = b.get("name") or "탭"
+            url = b.get("url") or ""
+            if not url:
+                continue
+            try:
+                uniq = await self._fetch_items(url)
+                if not uniq:
+                    continue
+    
+                # ✅ 목록의 맨 마지막(가장 아래) 아이템 선택
+                tail = uniq[-1]
+    
+                # 상태(last_id)는 변경하지 않음 (테스트 전용)
+                embed = discord.Embed(
+                    title=f"[{name}] (테스트) 목록의 마지막 글",
+                    description=f"**{tail['title']}**",
+                    url=tail["url"],
+                    timestamp=datetime.now(timezone.utc),
+                    color=discord.Color.magenta(),
+                )
+                for ch in dest_channels:
+                    try:
+                        await ch.send(embed=embed)
+                    except Exception:
+                        continue
+                sent += 1
+            except Exception:
+                continue
+        return sent
+
     async def _ensure_playwright(self):
         if not PLAYWRIGHT_OK:
             return
@@ -123,6 +181,14 @@ class NetmarbleWatcher(commands.Cog):
         g["channel_id"] = channel.id
         save_data(self.data)
         await ctx.send(f"✅ 알림 채널을 {channel.mention} 로 설정했어요.")
+
+    @commands.command(name="테스트마지막")
+    async def test_tail(self, ctx: commands.Context):
+        """각 보드의 현재 목록에서 '맨 마지막 글'을 1회 공지(상태 갱신 안함)"""
+        await ctx.send("🧪 각 보드의 '마지막 글'을 테스트로 보내요(상태 미갱신)…")
+        n = await self._send_tail_for_guild(ctx.guild)
+        await ctx.send(f"✅ 테스트 완료: {n}개 보드에서 마지막 글 전송")
+
 
     @commands.command(name="보드추가")
     async def add_board(self, ctx: commands.Context, name: str, url: str):
