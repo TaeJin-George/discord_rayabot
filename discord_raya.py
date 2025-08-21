@@ -12,6 +12,8 @@ Discord Counter Deck Chatbot (Cloudtype/GCP VM 모두 호환)
 """
 from __future__ import annotations
 import os
+print("=== 현재 작업 디렉토리:", os.getcwd())
+print("=== 파일 목록:", os.listdir(os.getcwd()))
 import logging
 import traceback
 import re
@@ -225,7 +227,6 @@ async def setup_hook():
         logger.info("netmarble_watcher 로드 완료")
     except Exception:
         logger.error("netmarble_watcher 로드 실패:\n" + traceback.format_exc())
-        logger.error(f"현재 디렉터리 목록: {os.listdir(here)}")
 
 bot.setup_hook = setup_hook
 # --- 끝 ---
