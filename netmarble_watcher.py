@@ -6,6 +6,9 @@ from typing import Dict, Any, List, Optional, Union
 import discord
 from discord.ext import commands, tasks
 
+from urllib.parse import urljoin
+import requests
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -237,15 +240,17 @@ class NetmarbleWatcher(commands.Cog):
                 r = await client.get(url, follow_redirects=True)
                 r.raise_for_status()
                 html = r.text
-                items: List[Dict[str,str]] = []
-
-                # 1차: a[href] 셀렉터로 수집
                 soup = BeautifulSoup(html, "html.parser")
+
+                items: List[Dict[str, str]] = []
                 seen = set()
-                sel = f'a[href^="/sena_rebirth/view/{board_id}/"]' if board_id else 'a[href*="/sena_rebirth/view/"]'
-                for a in soup.select(sel):
+
+                # ✅ Netmarble 포럼 목록 구조 대응 (a.medium)
+                for a in soup.select("a.medium"):
                     href = (a.get("href") or "").strip()
                     title = (a.get_text(strip=True) or "")
+                    if not href:
+                        continue
                     if href.startswith("/"):
                         href = f"https://forum.netmarble.com{href}"
                     if not VIEW_LINK_RE.match(href) or href in seen:
@@ -255,7 +260,7 @@ class NetmarbleWatcher(commands.Cog):
                     if len(items) >= 30:
                         break
 
-                # 2차: 정규식 백업 스캔
+                # 🔙 백업: 혹시 못 잡았을 경우 정규식 fallback
                 if not items:
                     paths = VIEW_PATH_RE.findall(html)
                     for p in paths:
@@ -271,9 +276,11 @@ class NetmarbleWatcher(commands.Cog):
 
                 log.info(f"[fetch] {url} -> {len(items)} links")
                 return items
+
         except Exception as e:
             log.warning(f"[fetch] fail {url}: {e}")
             return []
+
 
     async def _dest_channels(self, guild: discord.Guild) -> List[Union[discord.TextChannel, discord.Thread]]:
         gid = str(guild.id)
