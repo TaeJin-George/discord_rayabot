@@ -1,7 +1,7 @@
 # netmarble_watcher.py (Playwright-free)
 import os, json, asyncio, re, logging
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
 import discord
 from discord.ext import commands, tasks
@@ -275,7 +275,7 @@ class NetmarbleWatcher(commands.Cog):
             log.warning(f"[fetch] fail {url}: {e}")
             return []
 
-    async def _dest_channels(self, guild: discord.Guild) -> List[discord.abc.MessageableChannel]:
+    async def _dest_channels(self, guild: discord.Guild) -> List[Union[discord.TextChannel, discord.Thread]]:
         gid = str(guild.id)
         g = self.data.setdefault(gid, {})
         chs: List[int] = g.get("channel_ids") or []
