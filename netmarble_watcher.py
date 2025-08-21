@@ -14,6 +14,9 @@ from discord.ext import commands, tasks
 import httpx
 from bs4 import BeautifulSoup
 
+import logging
+log = logging.getLogger("netmarble")
+
 # ============ 설정/유틸 ============
 
 DATA_PATH = "nm_watcher_data.json"
@@ -266,7 +269,7 @@ class NetmarbleWatcher(commands.Cog):
             try:
                 await self._run_once_for_guild(guild)
             except Exception as e:
-                print(f"[watch_loop] guild={guild.id} error: {e}")
+                log.info(f"[watch_loop] guild={guild.id} error: {e}")
 
     async def _scrape_with_browser(self, url: str) -> List[Dict[str, str]]:
         await self._ensure_playwright()
@@ -313,7 +316,7 @@ class NetmarbleWatcher(commands.Cog):
                     break
     
             # 디버그: 몇 개 잡혔는지 남겨두면 문제 파악 쉬움
-            print(f"[watcher] browser items for {url} -> {len(out)} links")
+            log.info(f"[watcher] browser items for {url} -> {len(out)} links")
     
             return out
         finally:
@@ -345,7 +348,7 @@ class NetmarbleWatcher(commands.Cog):
                     if len(out) >= 20:
                         break
     
-                print(f"[watcher] http items for {url} -> {len(out)} links")
+                log.info(f"[watcher] http items for {url} -> {len(out)} links")
                 return out
         except Exception:
             return []
@@ -408,7 +411,7 @@ class NetmarbleWatcher(commands.Cog):
                 save_data(self.data)
 
             except Exception as e:
-                print(f"[watch] guild={gid} board={name} err={e}")
+                log.info(f"[watch] guild={gid} board={name} err={e}")
                 continue
         return sent
 
