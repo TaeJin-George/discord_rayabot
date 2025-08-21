@@ -20,7 +20,18 @@ DATA_PATH = "nm_watcher_data.json"
 DEFAULT_INTERVAL_MIN = int(os.getenv("WATCH_INTERVAL_MIN", "3"))
 
 # 세나 리버스 포럼 글 링크 대략 매칭
-LINK_RE = re.compile(r"https?://forum\.netmarble\.com/sena_rebirth/.+/\d+")
+# LINK_RE = re.compile(r"https?://forum\.netmarble\.com/sena_rebirth/.+/\d+")
+LINK_RE_NETMARBLE = re.compile(r"^https?://forum\.netmarble\.com/sena_rebirth/.+/\d+")
+# 네이버 라운지는 글 상세가 /post/ 또는 /article/ 패턴을 쓰는 경우가 많음 → 완화 필터
+LINK_RE_NAVER     = re.compile(r"^https?://game\.naver\.com/lounge/sena_rebirth/(?:post|article|board)/.+", re.IGNORECASE)
+
+def _pick_link_re(board_url: str):
+    if "forum.netmarble.com" in board_url:
+        return LINK_RE_NETMARBLE
+    if "game.naver.com" in board_url and "/lounge/sena_rebirth/" in board_url:
+        return LINK_RE_NAVER
+    # 기본은 (보수적으로) 넷마블 정규식
+    return LINK_RE_NETMARBLE
 
 # Playwright 사용 가능 여부
 PLAYWRIGHT_OK = True
@@ -210,7 +221,8 @@ class NetmarbleWatcher(commands.Cog):
             for a in anchors:
                 href = a.get("href") or ""
                 text = a.get("text") or ""
-                if LINK_RE.search(href) and text and href not in seen:
+                link_re = _pick_link_re(url)
+                if link_re.search(href) and text and href not in seen:
                     out.append({"id": href, "title": text, "url": href})
                     seen.add(href)
                     if len(out) >= 10:
@@ -230,6 +242,8 @@ class NetmarbleWatcher(commands.Cog):
                 for a in soup.select("a"):
                     href = (a.get("href") or "").strip()
                     text = (a.get_text(strip=True) or "")
+                    link_re = _pick_link_re(url)
+                    
                     if not href:
                         continue
                     if href.startswith("/"):
