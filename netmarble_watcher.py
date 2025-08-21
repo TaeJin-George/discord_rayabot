@@ -314,35 +314,35 @@ class NetmarbleWatcher(commands.Cog):
             await page.close()
 
     async def _scrape_with_http(self, url: str) -> List[Dict[str, str]]:
-    try:
-        m = BOARD_ID_RE.search(url)
-        board_id = m.group(1) if m else None
-
-        async with httpx.AsyncClient(timeout=15, headers={"User-Agent":"Mozilla/5.0"}) as client:
-            r = await client.get(url, follow_redirects=True)
-            r.raise_for_status()
-            soup = BeautifulSoup(r.text, "html.parser")
-
-            out, seen = [], set()
-            for a in soup.select("a[href]"):
-                href = a.get("href", "").strip()
-                text = a.get_text(strip=True)
-                if not href or not text:
-                    continue
-                if href.startswith("/"):
-                    href = f"https://forum.netmarble.com{href}"
-                if board_id and f"/view/{board_id}/" not in href:
-                    continue
-                if not VIEW_LINK_RE.match(href):
-                    continue
-                if href not in seen:
-                    out.append({"id": href, "title": text, "url": href})
-                    seen.add(href)
-                    if len(out) >= 12:
-                        break
-            return out
-    except Exception:
-        return []
+        try:
+            m = BOARD_ID_RE.search(url)
+            board_id = m.group(1) if m else None
+    
+            async with httpx.AsyncClient(timeout=15, headers={"User-Agent":"Mozilla/5.0"}) as client:
+                r = await client.get(url, follow_redirects=True)
+                r.raise_for_status()
+                soup = BeautifulSoup(r.text, "html.parser")
+    
+                out, seen = [], set()
+                for a in soup.select("a[href]"):
+                    href = a.get("href", "").strip()
+                    text = a.get_text(strip=True)
+                    if not href or not text:
+                        continue
+                    if href.startswith("/"):
+                        href = f"https://forum.netmarble.com{href}"
+                    if board_id and f"/view/{board_id}/" not in href:
+                        continue
+                    if not VIEW_LINK_RE.match(href):
+                        continue
+                    if href not in seen:
+                        out.append({"id": href, "title": text, "url": href})
+                        seen.add(href)
+                        if len(out) >= 12:
+                            break
+                return out
+        except Exception:
+            return []
 
 
     async def _fetch_items(self, url: str) -> List[Dict[str, str]]:
