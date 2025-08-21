@@ -184,6 +184,28 @@ class NetmarbleWatcher(commands.Cog):
         save_data(self.data)
         await ctx.send(f"✅ 알림 채널을 {channel.mention} 로 설정했어요.")
 
+    @commands.command(name="디버그링크")
+    async def debug_links(self, ctx: commands.Context):
+        """각 보드에서 감지한 링크 상위 5개를 현재 채널로 덤프(상태 미갱신)"""
+        gid = str(ctx.guild.id)
+        g = self.data.setdefault(gid, {})
+        boards = g.get("boards", [])
+        if not boards:
+            await ctx.send("보드가 없습니다. `!보드추가`로 먼저 등록해 주세요.")
+            return
+    
+        for b in boards:
+            name = b.get("name") or "탭"
+            url = b.get("url") or ""
+            if not url:
+                continue
+            items = await self._fetch_items(url)
+            if not items:
+                await ctx.send(f"[{name}] 감지 0개")
+                continue
+            head = "\n".join(f"- {it['url']}" for it in items[:5])
+            await ctx.send(f"[{name}] 감지 {len(items)}개 (상위 5)\n{head}")
+
     @commands.command(name="테스트마지막")
     async def test_tail(self, ctx: commands.Context):
         """각 보드의 현재 목록에서 '맨 마지막 글'을 1회 공지(상태 갱신 안함)"""
