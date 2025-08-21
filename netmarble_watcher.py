@@ -26,9 +26,12 @@ DEFAULT_INTERVAL_MIN = int(os.getenv("WATCH_INTERVAL_MIN", "3"))
 # LINK_RE = re.compile(r"https?://forum\.netmarble\.com/sena_rebirth/.+/\d+")
 # LINK_RE = re.compile(r"^https?://forum\.netmarble\.com/sena_rebirth/.+/\d+")
 #BOARD_ID_RE = re.compile(r"/list/(\d+)/")
-VIEW_LINK_RE = re.compile(
-    r"^https?://forum\.netmarble\.com/sena_rebirth/view/\d+/\d+(?:[?#].*)?$"
-)
+BOARD_ID_RE = re.compile(r"/list/(\d+)/")
+# 쿼리스트링/프래그먼트까지 허용
+VIEW_LINK_RE = re.compile(r"^https?://forum\.netmarble\.com/sena_rebirth/view/\d+/\d+(?:[?#].*)?$")
+# 절대경로가 아닌 /sena_rebirth/view/... 를 찾는 백업 패턴
+VIEW_PATH_RE = re.compile(r'/sena_rebirth/view/\d+/\d+')
+
 
 # Playwright 사용 가능 여부
 PLAYWRIGHT_OK = True
@@ -283,44 +286,51 @@ class NetmarbleWatcher(commands.Cog):
         try:
             await page.goto(url, wait_until="networkidle", timeout=20000)
     
-            # 목록 렌더 완료 대기: 해당 보드의 view 링크가 최소 1개는 나타날 때까지
+            # 1차: 셀렉터로 바로 수집
             sel = f'a[href^="/sena_rebirth/view/{board_id}/"]' if board_id else 'a[href*="/sena_rebirth/view/"]'
+            items: List[Dict[str,str]] = []
             try:
                 await page.wait_for_selector(sel, timeout=8000)
+                anchors = await page.eval_on_selector_all(
+                    sel,
+                    """els => els.map(a => ({href: a.getAttribute('href') || '', text: (a.textContent||'').trim()}))"""
+                )
+                seen = set()
+                for a in anchors:
+                    href = (a.get("href") or "").strip()
+                    if href.startswith("/"):
+                        href = f"https://forum.netmarble.com{href}"
+                    if not VIEW_LINK_RE.match(href) or href in seen:
+                        continue
+                    items.append({"id": href, "title": (a.get("text") or "") or href, "url": href})
+                    seen.add(href)
+                    if len(items) >= 20:
+                        break
             except Exception:
-                # 첫 대기가 실패하면 약간 더 기다려 본다
-                await page.wait_for_timeout(1200)
+                pass
     
-            # 정확 셀렉터로 바로 수집 (불필요한 a 태그 제거)
-            anchors = await page.eval_on_selector_all(
-                sel,
-                """els => els.map(a => ({href: a.getAttribute('href') || '', text: (a.textContent||'').trim()}))"""
-            )
+            # 2차(백업): 렌더된 HTML 통째로 정규식 스캔
+            if not items:
+                html = await page.content()
+                paths = VIEW_PATH_RE.findall(html)
+                seen = set()
+                for p in paths:
+                    # 보드ID가 있으면 같은 보드만
+                    if board_id and f"/view/{board_id}/" not in p:
+                        continue
+                    href = f"https://forum.netmarble.com{p}"
+                    if href in seen or not VIEW_LINK_RE.match(href):
+                        continue
+                    items.append({"id": href, "title": href, "url": href})
+                    seen.add(href)
+                    if len(items) >= 20:
+                        break
     
-            # 절대 URL로 정규화 + 필터
-            out, seen = [], set()
-            for a in anchors:
-                href = (a.get("href") or "").strip()
-                text = (a.get("text") or "").strip()
-                if not href:
-                    continue
-                if href.startswith("/"):
-                    href = f"https://forum.netmarble.com{href}"
-                if not VIEW_LINK_RE.match(href):
-                    continue
-                if href in seen:
-                    continue
-                out.append({"id": href, "title": text or href, "url": href})
-                seen.add(href)
-                if len(out) >= 20:
-                    break
-    
-            # 디버그: 몇 개 잡혔는지 남겨두면 문제 파악 쉬움
-            log.info(f"[watcher] browser items for {url} -> {len(out)} links")
-    
-            return out
+            # 정렬: 보통 목록 상단부터 나오므로 그대로 사용
+            return items
         finally:
             await page.close()
+
 
 
     async def _scrape_with_http(self, url: str) -> List[Dict[str, str]]:
@@ -330,28 +340,43 @@ class NetmarbleWatcher(commands.Cog):
             async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "Mozilla/5.0"}) as client:
                 r = await client.get(url, follow_redirects=True)
                 r.raise_for_status()
-                soup = BeautifulSoup(r.text, "html.parser")
+                html = r.text
+                items: List[Dict[str,str]] = []
     
-                # 보수적으로 전역에서 a를 모으되, href 패턴으로 강하게 걸러낸다
-                out, seen = [], set()
+                # 1차: soup 셀렉터
+                soup = BeautifulSoup(html, "html.parser")
+                seen = set()
                 for a in soup.select(f'a[href^="/sena_rebirth/view/{board_id}/"]' if board_id else 'a[href*="/sena_rebirth/view/"]'):
                     href = (a.get("href") or "").strip()
-                    text = (a.get_text(strip=True) or "")
                     if href.startswith("/"):
                         href = f"https://forum.netmarble.com{href}"
-                    if not VIEW_LINK_RE.match(href):
+                    if not VIEW_LINK_RE.match(href) or href in seen:
                         continue
-                    if href in seen:
-                        continue
-                    out.append({"id": href, "title": text or href, "url": href})
+                    title = a.get_text(strip=True) or href
+                    items.append({"id": href, "title": title, "url": href})
                     seen.add(href)
-                    if len(out) >= 20:
+                    if len(items) >= 20:
                         break
     
-                log.info(f"[watcher] http items for {url} -> {len(out)} links")
-                return out
+                # 2차(백업): 정규식 스캔
+                if not items:
+                    paths = VIEW_PATH_RE.findall(html)
+                    seen = set()
+                    for p in paths:
+                        if board_id and f"/view/{board_id}/" not in p:
+                            continue
+                        href = f"https://forum.netmarble.com{p}"
+                        if href in seen or not VIEW_LINK_RE.match(href):
+                            continue
+                        items.append({"id": href, "title": href, "url": href})
+                        seen.add(href)
+                        if len(items) >= 20:
+                            break
+    
+                return items
         except Exception:
             return []
+
 
 
 
