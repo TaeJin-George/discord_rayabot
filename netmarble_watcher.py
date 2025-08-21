@@ -6,9 +6,6 @@ from typing import Dict, Any, List, Optional, Union
 import discord
 from discord.ext import commands, tasks
 
-from urllib.parse import urljoin
-import requests
-
 import httpx
 from bs4 import BeautifulSoup
 
