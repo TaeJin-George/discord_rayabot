@@ -218,6 +218,18 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 data_store = DataStore(EXCEL_FILE)
 
+# --- 추가: netmarble_watcher 코그 로드 ---
+async def setup_hook():
+    try:
+        await bot.load_extension("netmarble_watcher")
+        logger.info("netmarble_watcher 로드 완료")
+    except Exception:
+        logger.error("netmarble_watcher 로드 실패:\n" + traceback.format_exc())
+
+bot.setup_hook = setup_hook
+# --- 끝 ---
+
+
 # 최초 로드
 data_store.load()
 
