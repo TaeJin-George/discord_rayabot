@@ -27,6 +27,90 @@ from dotenv import load_dotenv
 print("=== 현재 작업 디렉토리:", os.getcwd())
 print("=== 파일 목록:", os.listdir(os.getcwd()))
 
+
+# ===== 고정 상수 =====
+PET_FLAT = 1119            # 펫 고정 공격력
+FORMATION_FLAT = 630       # 진형 고정 가산
+BUFF_ATK_RATE = 0.21       # 공격력 버프 +21% (곱연산)
+
+# 세트 계수
+WEAK_COEFF_TRACKER = 1.65   # 추적자: 약점 계수
+SET_DMG_AVENGER = 1.30      # 복수자: 피해량 계수
+WEAK_COEFF_DEFAULT = 1.30   # 기타 세트: 약점 계수(요청 고정)
+SET_DMG_DEFAULT = 1.0       # 기타 세트: 피해량 계수
+
+# 캐릭터별 100점 상한
+SCORE_CAP = {
+    "태오": 38584,
+    "콜트": 13696,
+    "린":   29190,
+    "연희": 25227,
+}
+
+# 캐릭터 고유 로직
+def is_always_crit(character: str) -> bool:
+    return character == "태오"
+
+def is_never_crit_and_weak(character: str) -> bool:
+    return character == "콜트"
+
+def parse_percent(x: str) -> float:
+    return float(x.replace('%', '').strip())
+
+def normalize_set(name: str):
+    name = name.strip()
+    if name == "추적자":
+        return WEAK_COEFF_TRACKER, 1.0
+    if name == "복수자":
+        return WEAK_COEFF_DEFAULT, SET_DMG_AVENGER
+    # 그 외 세트: 약점 1.3, 피해량 1.0 고정
+    return WEAK_COEFF_DEFAULT, SET_DMG_DEFAULT
+
+def final_attack(stat_atk: float, character: str) -> float:
+    """
+    기본 최종공격력 = (스탯공 + 펫(1119) + 진형(630)) * (1 + 0.21)
+    콜트는 이 계산 이후 +1320 추가
+    """
+    atk = (stat_atk + PET_FLAT + FORMATION_FLAT) * (1.0 + BUFF_ATK_RATE)
+    if character == "콜트":
+        atk += 1320.0
+    return atk
+
+def compute_damage(character: str, stat_atk: float, crit_rate_pct: float,
+                   crit_dmg_pct: float, weak_rate_pct: float, set_name: str):
+    """
+    전투력(약점O), 전투력(약점X), 기대 전투력(약확 반영), 최종공격력
+    """
+    atk = final_attack(stat_atk, character)
+    weak_coeff, set_dmg = normalize_set(set_name)
+
+    # 치명 배수
+    cd_mult = max(1.0, crit_dmg_pct / 100.0)  # 방어적 처리
+    if is_never_crit_and_weak(character):
+        crit_factor = 1.0
+    elif is_always_crit(character):
+        crit_factor = cd_mult
+    else:
+        pcrit = max(0.0, min(1.0, crit_rate_pct / 100.0))
+        crit_factor = pcrit * cd_mult + (1 - pcrit) * 1.0
+
+    # 약점 배수
+    if is_never_crit_and_weak(character):
+        pweak = 0.0
+    else:
+        pweak = max(0.0, min(1.0, weak_rate_pct / 100.0))
+
+    dmg_on_weak = atk * crit_factor * weak_coeff * set_dmg
+    dmg_no_weak = atk * crit_factor * 1.0        * set_dmg
+    dmg_expected = atk * crit_factor * (pweak * weak_coeff + (1 - pweak) * 1.0) * set_dmg
+    return atk, dmg_on_weak, dmg_no_weak, dmg_expected
+
+def score_from_cap(character: str, value: float) -> float:
+    cap = SCORE_CAP.get(character)
+    if not cap or cap <= 0:
+        return 0.0
+    return round(value / cap * 100.0, 2)
+
 # -----------------------------
 # 로깅 설정
 # -----------------------------
@@ -260,8 +344,8 @@ async def help_cmd(ctx: commands.Context):
     try:
         msg = (
             "**사용법**\n"
-            "- `!조합 A, B, C` : 방어덱 A,B,C에 대한 카운터덱을 모두 표시\n"
-            "- `!조합 A, B, C | 스킬1, 스킬2, 스킬3` : 방어 스킬 순서까지 지정해 정확히 일치하는 카운터만 표시\n"
+            "- `!조합 A,B,C` : 방어덱 A,B,C에 대한 카운터덱을 모두 표시\n"
+            "- `!조합 A,B,C,스킬1,스킬2,스킬3` : 방어 스킬 순서까지 지정해 정확히 일치하는 카운터만 표시\n"
             "- `!리로드` : 데이터 소스(엑셀/구글시트)를 다시 로드\n"
             "- `!상태` : 데이터 상태 확인\n"
         )
@@ -346,6 +430,92 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
     except Exception:
         logger.error("!조합 처리 오류:\n" + traceback.format_exc())
         await ctx.send("⚠️ 요청을 처리하는 중 알 수 없는 오류가 발생했어요.")
+
+@bot.command(name="사용법")
+async def cmd_help(ctx):
+    embed = discord.Embed(
+        title="⚔️ 전투력 계산기 사용법",
+        description="세븐나이츠 레이드 전투력 산출기",
+        color=0x00BFFF
+    )
+
+    embed.add_field(
+        name="입력 형식",
+        value="`!전투력 캐릭터/스탯공격력/치확/치피/약확/세트옵션`",
+        inline=False
+    )
+
+    embed.add_field(
+        name="예시",
+        value="`!전투력 태오/5338/5%/174%/20%/복수자`",
+        inline=False
+    )
+
+    embed.add_field(
+        name="안내",
+        value=(
+            "📌 **계산 기준**\n"
+            "- 6성 펫\n"
+            "- 잠재 37%\n"
+            "- 모든 캐릭터 치명타 확률/약점 공격 확률 100%\n"
+            "- 100점은 극 속공포기 내실 엔드 세팅 기준\n"
+            "- 콜트의 경우 속공 77 기준"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text="지원 캐릭터: 태오, 콜트, 연희, 린 / 지원 세트: 추적자, 복수자, 기타")
+
+    await ctx.reply(embed=embed)
+
+@bot.command(name="전투력")
+async def cmd_power(ctx, *, argline: str):
+    """
+    사용법:
+    !전투력 캐릭터/스탯공격력/치확/치피/약확/세트옵션
+    예) !전투력 태오/5338/5%/174%/20%/복수자
+    """
+    try:
+        parts = [p.strip() for p in argline.split('/')]
+        if len(parts) != 6:
+            return await ctx.reply("형식: !전투력 캐릭터/스탯공격력/치확/치피/약확/세트옵션")
+
+        character, stat_s, cr_s, cd_s, wr_s, set_name = parts
+        if character not in ("태오", "콜트", "연희", "린"):
+            return await ctx.reply("지원 캐릭터: 태오, 콜트, 연희, 린")
+
+        stat_atk  = float(stat_s)
+        crit_rate = parse_percent(cr_s)
+        crit_dmg  = parse_percent(cd_s)
+        weak_rate = parse_percent(wr_s)
+
+        atk, dmg_w, dmg_nw, dmg_exp = compute_damage(
+            character=character,
+            stat_atk=stat_atk,
+            crit_rate_pct=crit_rate,
+            crit_dmg_pct=crit_dmg,
+            weak_rate_pct=weak_rate,
+            set_name=set_name
+        )
+
+        score_w  = score_from_cap(character, dmg_w)
+        score_nw = score_from_cap(character, dmg_nw)
+
+        def fmt(x): return f"{int(round(x,0)):,}"
+        cap_info = SCORE_CAP.get(character, "미설정")
+
+        msg = (
+            f"**{character} / {set_name}**\n"
+            f"- 최종공격력: {fmt(atk)}\n"
+            f"- 전투력(약점O): {fmt(dmg_w)} → **{score_w}점**\n"
+            f"- 전투력(약점X): {fmt(dmg_nw)} → **{score_nw}점**\n"
+            f"- 기대 전투력(약확 반영): {fmt(dmg_exp)}\n"
+            f"기준(100점): {character} 상한 {cap_info}"
+        )
+        await ctx.reply(msg)
+
+    except Exception as e:
+        await ctx.reply(f"에러: {e}")
 
 
 @bot.event
