@@ -343,16 +343,20 @@ async def send_long_message(dst, text: str):
 async def help_cmd(ctx: commands.Context):
     try:
         msg = (
-            "**사용법**\n"
-            "- `!조합 A,B,C` : 방어덱 A,B,C에 대한 카운터덱을 모두 표시\n"
-            "- `!조합 A,B,C,스킬1,스킬2,스킬3` : 방어 스킬 순서까지 지정해 정확히 일치하는 카운터만 표시\n"
-            "- `!리로드` : 데이터 소스(엑셀/구글시트)를 다시 로드\n"
-            "- `!상태` : 데이터 상태 확인\n"
+            "**명령어 안내**\n"
+            "• `!사용법` : 상세 가이드(입력 규칙/예시/주의)\n"
+            "• `!조합 A,B,C` : 상대(방어) 조합의 카운터덱 안내\n"
+            "  └ `!조합 A,B,C,스킬1,스킬2,스킬3` : 방어 스킬 순서까지 일치 조건\n"
+            "• `!전투력 캐릭/스탯공/치확/치피/약확/세트` : 전투력 계산\n"
+            "• `!리로드` : 데이터 소스(엑셀/구글시트) 리로드\n"
+            "• `!상태` : 데이터 로드 상태 확인\n"
         )
         await ctx.send(msg)
     except Exception:
         logger.error("!도움말 처리 오류:\n" + traceback.format_exc())
         await ctx.send("⚠️ 도움말을 표시하는 중 오류가 발생했어요.")
+
+
 
 @bot.command(name="상태")
 async def status_cmd(ctx: commands.Context):
@@ -395,8 +399,8 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
         else:
             await ctx.send(
                 "❌ 입력은 쉼표로만 구분해 주세요.\n"
-                "예1) `!조합 A, B, C`\n"
-                "예2) `!조합 A, B, C, 스킬1, 스킬2, 스킬3`"
+                "예1) `!조합 A,B,C`\n"
+                "예2) `!조합 A,B,C,스킬1,스킬2,스킬3`"
             )
             return
 
@@ -432,41 +436,50 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
         await ctx.send("⚠️ 요청을 처리하는 중 알 수 없는 오류가 발생했어요.")
 
 @bot.command(name="사용법")
-async def cmd_help(ctx):
-    embed = discord.Embed(
-        title="⚔️ 전투력 계산기 사용법",
-        description="세븐나이츠 레이드 전투력 산출기",
-        color=0x00BFFF
-    )
+async def manual_cmd(ctx: commands.Context):
+    try:
+        embed = discord.Embed(
+            title="📖 사용법",
+            description="입력 규칙과 예시를 확인하세요.",
+            color=0x00BFFF
+        )
 
-    embed.add_field(
-        name="입력 형식",
-        value="`!전투력 캐릭터/스탯공격력/치확/치피/약확/세트옵션`",
-        inline=False
-    )
+        embed.add_field(
+            name="🛡️ 카운터덱 (`!조합`)",
+            value=(
+                "• **쉼표(,)** 로만 구분합니다. 스페이스/특수문자는 그대로 유지하세요.\n"
+                "• 예1) `!조합 니아,델론즈,스파이크`\n"
+                "• 예2) `!조합 니아,델론즈,스파이크,니아 위,델론즈 아래,스파이크 위`\n"
+                "※ 예2는 방어 스킬 순서까지 정확히 일치하는 데이터만 찾습니다."
+            ),
+            inline=False
+        )
 
-    embed.add_field(
-        name="예시",
-        value="`!전투력 태오/5338/5%/174%/20%/복수자`",
-        inline=False
-    )
+        embed.add_field(
+            name="⚔️ 전투력 (`!전투력`)",
+            value=(
+                "• **슬래시(/)** 로 구분합니다.\n"
+                "• 형식: `!전투력 캐릭/스탯공/치확/치피/약확/세트`\n"
+                "• 예) `!전투력 태오/5338/5%/174%/20%/복수자`"
+            ),
+            inline=False
+        )
 
-    embed.add_field(
-        name="안내",
-        value=(
-            "📌 **계산 기준**\n"
-            "- 6성 펫\n"
-            "- 잠재 37%\n"
-            "- 모든 캐릭터 치명타 확률/약점 공격 확률 100%\n"
-            "- 100점은 극 속공포기 내실 엔드 세팅 기준\n"
-            "- 콜트의 경우 속공 77 기준"
-        ),
-        inline=False
-    )
+        embed.add_field(
+            name="📌 안내(전제)",
+            value=(
+                "6성 펫, 잠재 37% 기준, 모든 캐릭 치확/약확 100% 및 극 엔드 세팅 기준, "
+                "콜트의 경우 속공 77 기준입니다."
+            ),
+            inline=False
+        )
 
-    embed.set_footer(text="지원 캐릭터: 태오, 콜트, 연희, 린 / 지원 세트: 추적자, 복수자, 기타")
+        embed.set_footer(text="추가: `!리로드`, `!상태`")
+        await ctx.send(embed=embed)
+    except Exception:
+        logger.error("!사용법 처리 오류:\n" + traceback.format_exc())
+        await ctx.send("⚠️ 요청을 처리하는 중 알 수 없는 오류가 발생했어요.")
 
-    await ctx.reply(embed=embed)
 
 @bot.command(name="전투력")
 async def cmd_power(ctx, *, argline: str):
@@ -478,16 +491,19 @@ async def cmd_power(ctx, *, argline: str):
     try:
         parts = [p.strip() for p in argline.split('/')]
         if len(parts) != 6:
-            return await ctx.reply("형식: !전투력 캐릭터/스탯공격력/치확/치피/약확/세트옵션")
+            return await ctx.reply("❌ 형식: `!전투력 캐릭/스탯공/치확/치피/약확/세트`  예) `!전투력 태오/5338/5%/174%/20%/복수자`")
 
         character, stat_s, cr_s, cd_s, wr_s, set_name = parts
         if character not in ("태오", "콜트", "연희", "린"):
-            return await ctx.reply("지원 캐릭터: 태오, 콜트, 연희, 린")
+            return await ctx.reply("❌ 지원 캐릭터: `태오`, `콜트`, `연희`, `린`")
 
-        stat_atk  = float(stat_s)
-        crit_rate = parse_percent(cr_s)
-        crit_dmg  = parse_percent(cd_s)
-        weak_rate = parse_percent(wr_s)
+        try:
+            stat_atk  = float(stat_s)
+            crit_rate = parse_percent(cr_s)
+            crit_dmg  = parse_percent(cd_s)
+            weak_rate = parse_percent(wr_s)
+        except ValueError:
+            return await ctx.reply("❌ 숫자 형식이 올바르지 않습니다. 예) 치확/치피/약확 `%` 포함: `5%`, `174%`, `20%`")
 
         atk, dmg_w, dmg_nw, dmg_exp = compute_damage(
             character=character,
@@ -502,20 +518,18 @@ async def cmd_power(ctx, *, argline: str):
         score_nw = score_from_cap(character, dmg_nw)
 
         def fmt(x): return f"{int(round(x,0)):,}"
-        cap_info = SCORE_CAP.get(character, "미설정")
 
-        msg = (
-            f"**{character} / {set_name}**\n"
-            f"- 최종공격력: {fmt(atk)}\n"
-            f"- 전투력(약점O): {fmt(dmg_w)} → **{score_w}점**\n"
-            f"- 전투력(약점X): {fmt(dmg_nw)} → **{score_nw}점**\n"
-            f"- 기대 전투력(약확 반영): {fmt(dmg_exp)}\n"
-            f"기준(100점): {character} 상한 {cap_info}"
-        )
+        msg = f"""
+**{character} / {set_name}**
+- 전투력(약점O): **{score_w}점**
+- 전투력(약점X): **{score_nw}점**
+- 기대 전투력(약확 반영): {fmt(dmg_exp)}
+"""
         await ctx.reply(msg)
 
-    except Exception as e:
-        await ctx.reply(f"에러: {e}")
+    except Exception:
+        logger.error("!전투력 처리 오류:\n" + traceback.format_exc())
+        await ctx.reply("⚠️ 전투력 계산 중 오류가 발생했어요.")
 
 
 @bot.event
