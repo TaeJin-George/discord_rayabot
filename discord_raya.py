@@ -46,7 +46,7 @@ SCORE_CAP = {
     "린":   29190,
     "연희": 25227,
     "세인": 52442,
-    "파스칼": 61061,
+    "파스칼": 57668,
 }
 
 # 캐릭터 고유 로직
@@ -106,7 +106,7 @@ def compute_damage(character: str, stat_atk: float, crit_rate_pct: float,
     else:
         pweak = max(0.0, min(1.0, weak_rate_pct / 100.0))
         if character == "세인":
-            pweak = min(1.0, pweak + 0.81)
+            pweak = min(1.0, pweak + 0.93)
         if character == "파스칼":
             pweak = min(1.0, pweak + 0.66)
 
@@ -487,7 +487,7 @@ async def manual_cmd(ctx: commands.Context):
             value=(
                 "6성 펫, 펫잠재 37% 기준, 모든 캐릭 치확/약확 100%의 극 내실 엔드 세팅 기준,"
                 "콜트의 경우 속공 77 기준입니다."
-                "파스칼의 경우 약확 6성에 1인 피증 10% 세공, 복수자 기준입니다."
+                "파스칼의 경우 약확 6성, 복수자 기준입니다. 피증반지 세공 고려 ❌ "
                 "세인의 경우 치확 6성에 약확 6성 세공, 복수자 기준입니다."
             ),
             inline=False
