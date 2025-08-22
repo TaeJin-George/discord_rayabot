@@ -92,6 +92,8 @@ def compute_damage(character: str, stat_atk: float, crit_rate_pct: float,
         crit_factor = cd_mult
     else:
         pcrit = max(0.0, min(1.0, crit_rate_pct / 100.0))
+        if character == "린":
+            pcrit = min(1.0, pcrit + 0.33)
         crit_factor = pcrit * cd_mult + (1 - pcrit) * 1.0
 
     # 약점 배수
