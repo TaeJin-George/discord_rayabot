@@ -216,7 +216,8 @@ class CleanupCog(commands.Cog):
         else:
             await ctx.reply("이 채널은 자동 청소가 설정되어 있지 않아요.", mention_author=False)
 
-    @commands.command(name="청소", aliases=["청소on"], help="이 채널 자동 청소 켜기")
+    # 수정 (충돌 해결)
+    @commands.command(name="청소on", help="이 채널 자동 청소 켜기")
     @is_manager()
     async def enable_auto(self, ctx: commands.Context):
         ch_id = str(ctx.channel.id)
@@ -307,3 +308,4 @@ class CleanupCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(CleanupCog(bot))
+
