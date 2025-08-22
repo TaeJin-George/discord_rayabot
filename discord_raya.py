@@ -316,6 +316,13 @@ async def setup_hook():
     except Exception:
         logger.error("netmarble_watcher 로드 실패:\n" + traceback.format_exc())
 
+    # ✅ 청소 코그 로드
+    try:
+        await bot.load_extension("cleanup_cog")
+        logger.info("cleanup_cog 로드 완료")
+    except Exception:
+        logger.error("cleanup_cog 로드 실패:\n" + traceback.format_exc())
+
 bot.setup_hook = setup_hook
 # --- 끝 ---
 
@@ -472,6 +479,18 @@ async def manual_cmd(ctx: commands.Context):
             value=(
                 "6성 펫, 펫잠재 37% 기준, 모든 캐릭 치확/약확 100%의 극 내실 엔드 세팅 기준,"
                 "콜트의 경우 속공 77 기준입니다."
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="🧹 채팅방 정리 (`!청소`/`!청소설정`)",
+            value=(
+                "• `!청소 100` : 최근 100개 삭제(핀 제외)\n"
+                "• `!청소봇 200` : 최근 200개 중 봇 메시지만 삭제\n"
+                "• `!청소유저 @닉 100` : 특정 유저 메시지 삭제\n"
+                "• `!청소전체` : 채널 전체 삭제(핀 제외, 버튼 확인)\n"
+                "• 자동: `!청소설정 추가 보존개수=500` 또는 `보존시간=48`(시간)\n"
+                "• 주기: `!청소설정 간격 15`  on/off: `!청소on`, `!청소off`"
             ),
             inline=False
         )
