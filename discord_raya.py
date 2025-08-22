@@ -516,6 +516,7 @@ async def cmd_power(ctx, *, argline: str):
 
         score_w  = score_from_cap(character, dmg_w)
         score_nw = score_from_cap(character, dmg_nw)
+        score_av = score_from_cap(character, dmg_exp)
 
         def fmt(x): return f"{int(round(x,0)):,}"
 
@@ -523,7 +524,7 @@ async def cmd_power(ctx, *, argline: str):
 **{character} / {set_name}**
 - 전투력(약점O): **{score_w}점**
 - 전투력(약점X): **{score_nw}점**
-- 기대 전투력(약확 반영): {fmt(dmg_exp)}
+- 기대 전투력(약확 반영): **{score_av}점**
 """
         await ctx.reply(msg)
 
