@@ -524,9 +524,9 @@ async def cmd_power(ctx, *, argline: str):
 
         msg = f"""
 **{character} / {set_name}**
+- 기대 전투력: **{score_av}점**
 - 전투력(약점O): **{score_w}점**
 - 전투력(약점X): **{score_nw}점**
-- 기대 전투력(약확 반영): **{score_av}점**
 """
         await ctx.reply(msg)
 
