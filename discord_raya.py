@@ -45,11 +45,13 @@ SCORE_CAP = {
     "콜트": 13696,
     "린":   29190,
     "연희": 25227,
+    "세인": 52442,
+    "파스칼": 62096,
 }
 
 # 캐릭터 고유 로직
 def is_always_crit(character: str) -> bool:
-    return character == "태오"
+    return character in ("태오","파스칼")
 
 def is_never_crit_and_weak(character: str) -> bool:
     return character == "콜트"
@@ -94,6 +96,8 @@ def compute_damage(character: str, stat_atk: float, crit_rate_pct: float,
         pcrit = max(0.0, min(1.0, crit_rate_pct / 100.0))
         if character == "린":
             pcrit = min(1.0, pcrit + 0.33)
+        if character == "세인":
+            pcrit = min(1.0, pcrit + 0.51)
         crit_factor = pcrit * cd_mult + (1 - pcrit) * 1.0
 
     # 약점 배수
@@ -101,6 +105,10 @@ def compute_damage(character: str, stat_atk: float, crit_rate_pct: float,
         pweak = 0.0
     else:
         pweak = max(0.0, min(1.0, weak_rate_pct / 100.0))
+        if character == "세인":
+            pweak = min(1.0, pweak + 0.81)
+        if character == "파스칼":
+            pweak = min(1.0, pweak + 0.66)
 
     dmg_on_weak = atk * crit_factor * weak_coeff * set_dmg
     dmg_no_weak = atk * crit_factor * 1.0        * set_dmg
@@ -479,6 +487,8 @@ async def manual_cmd(ctx: commands.Context):
             value=(
                 "6성 펫, 펫잠재 37% 기준, 모든 캐릭 치확/약확 100%의 극 내실 엔드 세팅 기준,"
                 "콜트의 경우 속공 77 기준입니다."
+                "파스칼의 경우 약확 6성에 1인 피증 10% 세공, 복수자 기준입니다."
+                "세인의 경우 치확 6성에 약확 6성 세공, 복수자 기준입니다."
             ),
             inline=False
         )
@@ -515,8 +525,8 @@ async def cmd_power(ctx, *, argline: str):
             return await ctx.reply("❌ 형식: `!전투력 캐릭/스탯공/치확/치피/약확/세트`  예) `!전투력 태오/5338/5%/174%/20%/복수자`")
 
         character, stat_s, cr_s, cd_s, wr_s, set_name = parts
-        if character not in ("태오", "콜트", "연희", "린"):
-            return await ctx.reply("❌ 지원 캐릭터: `태오`, `콜트`, `연희`, `린`")
+        if character not in ("태오", "콜트", "연희", "린", "세인", "파스칼"):
+            return await ctx.reply("❌ 지원 캐릭터: `태오`, `콜트`, `연희`, `린`, '세인', '파스칼'")
 
         try:
             stat_atk  = float(stat_s)
