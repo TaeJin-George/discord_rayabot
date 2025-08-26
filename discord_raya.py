@@ -7,8 +7,6 @@ Discord Counter Deck Chatbot (Cloudtype/GCP VM 모두 호환)
 
 1. discord_counter_bot.py  (봇 메인 코드)
 2. requirements.txt        (파이썬 의존성)
-3. .env.example            (환경 변수 템플릿)
-4. systemd 서비스 파일 예시 (discord-bot.service)
 """
 from __future__ import annotations
 import os
@@ -300,41 +298,6 @@ class DataStore:
         return results
 
 
-
-# -----------------------------
-# 디스코드 Bot
-# -----------------------------
-load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN", "")
-
-# 기존 EXCEL_FILE_PATH를 계속 지원하면서, DATA_SHEET_URL이 있으면 자동 우선
-EXCEL_FILE = os.getenv("DATA_SHEET_URL") or os.getenv("EXCEL_FILE_PATH", "카운터덱.xlsx")
-
-intents = discord.Intents.default()
-intents.message_content = True
-
-bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
-data_store = DataStore(EXCEL_FILE)
-
-# --- 추가: netmarble_watcher 코그 로드 ---
-async def setup_hook():
-    try:
-        await bot.load_extension("netmarble_watcher")
-        logger.info("netmarble_watcher 로드 완료")
-    except Exception:
-        logger.error("netmarble_watcher 로드 실패:\n" + traceback.format_exc())
-
-    # ✅ 청소 코그 로드
-    try:
-        await bot.load_extension("cleanup_cog")
-        logger.info("cleanup_cog 로드 완료")
-    except Exception:
-        logger.error("cleanup_cog 로드 실패:\n" + traceback.format_exc())
-
-bot.setup_hook = setup_hook
-# --- 끝 ---
-
-
 # 최초 로드
 data_store.load()
 
@@ -359,21 +322,52 @@ async def send_long_message(dst, text: str):
 @bot.command(name="도움말")
 async def help_cmd(ctx: commands.Context):
     try:
-        msg = (
-            "**명령어 안내**\n"
-            "• `!사용법` : 상세 가이드(입력 규칙/예시/주의)\n"
-            "• `!조합 A,B,C` : 길드전 상대(방어) 조합을 파훼한 적이 있는 덱을 안내합니다.\n"
-            "  └ `!조합 A,B,C,스킬1,스킬2,스킬3` : 방어 스킬 순서까지 일치 하는 카운터덱을 찾아냅니다.\n"
-            "• `!전투력 캐릭/스탯공/치확/치피/약확/세트` : 극 내실 엔드 세팅(부옵 유효 4줄) 기준 상대적인 전투력을 계산합니다.\n"
-            "• `!리로드` : 데이터 소스(엑셀/구글시트) 리로드\n"
-            "• `!상태` : 데이터 로드 상태 확인\n"
+        embed = discord.Embed(
+            title="❓ 도움말",
+            description="자주 쓰이는 명령어 목록입니다.",
+            color=0x32CD32
         )
-        await ctx.send(msg)
+
+        embed.add_field(
+            name="🛡️ 길드전 카운터덱 찾기",
+            value=(
+                "`!조합 A,B,C`\n"
+                "→ 방어 조합 `A,B,C`를 카운터한 기록을 보여줍니다.\n"
+                "`!조합 A,B,C,스킬1,스킬2,스킬3`\n"
+                "→ 방어 스킬 순서까지 일치하는 경우만 찾습니다."
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="⚔️ 딜러 전투력 계산",
+            value=(
+                "`!전투력 캐릭/스탯공/치확/치피/약확/세트`\n"
+                "예) `!전투력 태오/5338/5%/174%/20%/복수자`\n"
+                "→ 극 내실 종결 세팅 대비 내 캐릭터의 전투력을 계산합니다."
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="🔄 데이터 관리(운영진 전용)",
+            value=(
+                "`!리로드` → 데이터 소스(엑셀/구글시트) 다시 불러오기\n"
+                "`!상태`   → 현재 데이터 상태와 컬럼 확인"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="ℹ️ 참고",
+            value="세부 입력 규칙은 `!사용법` 명령으로 확인하세요.",
+            inline=False
+        )
+
+        await ctx.send(embed=embed)
     except Exception:
         logger.error("!도움말 처리 오류:\n" + traceback.format_exc())
         await ctx.send("⚠️ 도움말을 표시하는 중 오류가 발생했어요.")
-
-
 
 @bot.command(name="상태")
 async def status_cmd(ctx: commands.Context):
@@ -457,17 +451,17 @@ async def manual_cmd(ctx: commands.Context):
     try:
         embed = discord.Embed(
             title="📖 사용법",
-            description="입력 규칙과 예시를 확인하세요.",
+            description="명령어와 입력 규칙을 확인하세요.",
             color=0x00BFFF
         )
 
         embed.add_field(
             name="🛡️ 카운터덱 (`!조합`)",
             value=(
-                "• **쉼표(,)** 로만 구분합니다. 스페이스/특수문자는 그대로 유지하세요.\n"
+                "• **쉼표(,)** 로만 구분합니다. 이름 안의 공백은 그대로 유지하세요.\n"
                 "• 예1) `!조합 니아,델론즈,스파이크`\n"
                 "• 예2) `!조합 니아,델론즈,스파이크,니아 위,델론즈 아래,스파이크 위`\n"
-                "※ 예2는 방어 스킬 순서까지 정확히 일치하는 데이터만 찾습니다."
+                "   ↳ *예2는 방어 스킬 순서까지 정확히 일치하는 데이터만 찾습니다.*"
             ),
             inline=False
         )
@@ -483,24 +477,10 @@ async def manual_cmd(ctx: commands.Context):
         )
 
         embed.add_field(
-            name="📌 전투력 상세 안내(전제)",
+            name="📌 전투력 상세 안내",
             value=(
-                "6성 펫, 펫잠재 37% 기준, 모든 캐릭 치확/약확 100%의 극 내실 엔드 세팅 기준,"
-                "콜트의 경우 속공 77 기준입니다."
-                "파스칼의 경우 약확 6성, 복수자 기준입니다. 피증반지 세공 고려 ❌ "
-                "세인의 경우 치확 6성에 약확 6성 세공, 복수자 기준입니다."
-            ),
-            inline=False
-        )
-        embed.add_field(
-            name="🧹 채팅방 정리 (`!청소`/`!청소설정`)",
-            value=(
-                "• `!청소 100` : 최근 100개 삭제(핀 제외)\n"
-                "• `!청소봇 200` : 최근 200개 중 봇 메시지만 삭제\n"
-                "• `!청소유저 @닉 100` : 특정 유저 메시지 삭제\n"
-                "• `!청소전체` : 채널 전체 삭제(핀 제외, 버튼 확인)\n"
-                "• 자동: `!청소설정 추가 보존개수=500` 또는 `보존시간=48`(시간)\n"
-                "• 주기: `!청소설정 간격 15`  on/off: `!청소on`, `!청소off`"
+                "> 극 내실 종결 세팅 대비 현재 내 캐릭터의 전투력(데미지)을 나타냅니다.\n"
+                "> 속공이나 효과 적중 등 **데미지와 무관한 지표는 반영되지 않으니 참고 바랍니다.**\n"
             ),
             inline=False
         )
@@ -509,7 +489,7 @@ async def manual_cmd(ctx: commands.Context):
         await ctx.send(embed=embed)
     except Exception:
         logger.error("!사용법 처리 오류:\n" + traceback.format_exc())
-        await ctx.send("⚠️ 요청을 처리하는 중 알 수 없는 오류가 발생했어요.")
+        await ctx.send("⚠️ 요청을 처리하는 중 오류가 발생했어요.")
 
 
 @bot.command(name="전투력")
@@ -551,13 +531,30 @@ async def cmd_power(ctx, *, argline: str):
 
         def fmt(x): return f"{int(round(x,0)):,}"
 
-        msg = f"""
-**{character} / {set_name}**
-- 기대 전투력: **{score_av}점**
-- 전투력(약점O): **{score_w}점**
-- 전투력(약점X): **{score_nw}점**
-"""
+        # 기존:
+        # msg = f"""
+        # **{character} / {set_name}**
+        # - 기대 전투력: **{score_av}점**
+        # - 전투력(약점O): **{score_w}점**
+        # - 전투력(약점X): **{score_nw}점**
+        # """
+        # await ctx.reply(msg)
+
+        # 변경: 콜트는 기대 전투력만 표시
+        if character == "콜트":
+            msg = (
+                f"**{character} / {set_name}**\n"
+                f"- 폭탄 전투력: **{score_av}점**"
+            )
+        else:
+            msg = (
+                f"**{character} / {set_name}**\n"
+                f"- 기대 전투력: **{score_av}점**\n"
+                f"- 전투력(약점O): **{score_w}점**\n"
+                f"- 전투력(약점X): **{score_nw}점**"
+            )
         await ctx.reply(msg)
+
 
     except Exception:
         logger.error("!전투력 처리 오류:\n" + traceback.format_exc())
@@ -588,37 +585,4 @@ if __name__ == "__main__":
         except Exception:
             logger.critical("디스코드 런타임 크래시:\n" + traceback.format_exc())
 
-"""
-추가 레포 파일 예시:
-
-requirements.txt
-----------------
-discord.py>=2.3.2
-pandas>=2.2.0
-openpyxl>=3.1.2
-python-dotenv>=1.0.1
-
-.env.example
-------------
-DISCORD_TOKEN=여기에_디스코드_봇_토큰_입력
-# 엑셀 파일 경로(로컬 또는 마운트)
-EXCEL_FILE_PATH=카운터덱.xlsx
-# 또는 구글 시트 URL (있으면 이 값이 우선)
-# 예: https://docs.google.com/spreadsheets/d/1fvwkynV3iwMQ-0aa5VEaYDXCuKRGllezCtKK9x9-Yuo/edit?usp=sharing
-DATA_SHEET_URL=
-
-systemd 서비스 파일 (discord-bot.service)
----------------------------------------
-[Unit]
-Description=Discord Counter Bot
-After=network.target
-
-[Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/discord-counter-bot
-ExecStart=/home/ubuntu/venv/bin/python /home/ubuntu/discord-counter-bot/discord_counter_bot.py
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
 """
