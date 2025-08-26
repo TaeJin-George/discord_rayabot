@@ -585,4 +585,3 @@ if __name__ == "__main__":
         except Exception:
             logger.critical("디스코드 런타임 크래시:\n" + traceback.format_exc())
 
-"""
