@@ -297,6 +297,17 @@ class DataStore:
             logger.error("search_counters 오류:\n" + traceback.format_exc())
         return results
 
+load_dotenv()
+TOKEN = os.getenv("DISCORD_TOKEN", "")
+
+# 기존 EXCEL_FILE_PATH를 계속 지원하면서, DATA_SHEET_URL이 있으면 자동 우선
+EXCEL_FILE = os.getenv("DATA_SHEET_URL") or os.getenv("EXCEL_FILE_PATH", "카운터덱.xlsx")
+
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
+data_store = DataStore(EXCEL_FILE)
 
 # 최초 로드
 data_store.load()
