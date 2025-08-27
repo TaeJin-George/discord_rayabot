@@ -50,6 +50,14 @@ VULNERABILITY_PAI = 1.20        # 파이 물리 취약
 DEF_SHRED_VANESSA = 0.29        # 바네사 방깎 29%
 DEF_PENETRATION = 0.0           # 방무 없음
 
+# (A2) 속공 태오덱 상수
+TEO_SOKGONG_STAT_ATK = 4088
+TEO_SOKGONG_BASE_ATK = 1500
+TEO_SOKGONG_CRIT_MULT = 2.64
+TEO_SOKGONG_CRIT_DMG = 210  # %
+TEO_SOKGONG_SKILL_COEFF = 1.70
+# 펫/세트/버프/진형은 동일 (이린 1119, 공퍼 21%, 아일린 25%, 보호뒷줄42, 추적자, 파이, 바네사)
+
 # (B) 방어측 공통(펫/진형/버퍼)
 PET_DEFENSE_PERCENT = 0.13      # 펫 방어% +13%
 PET_DEFENSE_FLAT = 344          # 펫 깡방 +344
@@ -181,6 +189,13 @@ def _atk_final_for_teo() -> int:
     val = (TEO_STAT_ATK + PET_ATTACK_FLAT + formation_flat) * mult_atk_pct
     return floor(val)
 
+def _atk_final_for_sokgong_teo() -> int:
+    formation_flat = TEO_SOKGONG_BASE_ATK * FORMATION_ATTACK_PERCENT
+    mult_atk_pct = max(0.0, 1.0 + ATK_MULT_INCREASE_SUM)
+    val = (TEO_SOKGONG_STAT_ATK + PET_ATTACK_FLAT + formation_flat) * mult_atk_pct
+    return floor(val)
+
+
 def _effective_def_and_coeff(
     defender_name: str,
     stat_def: int,
@@ -246,28 +261,42 @@ def simulate_vs_teo(
 ) -> Dict[str, Any]:
     """
     막기 뜸/안 뜸 두 케이스 반환 + (선택) 방어버퍼 1명 채용 결과
+    동시에 '속공 태오' 시나리오도 계산해서 함께 반환
     """
     # 추천 버퍼: 본인이 루디면 앨리스, 아니면 루디
     if friend_buffer is None:
         friend_buffer = "앨리스" if defender_name == "루디" else "루디"
     buff_info = DEF_BUFFS.get(friend_buffer, {"def_percent": 0.0, "dampening": 0.0})
 
-    # 공격자 고정값
-    atk_final = _atk_final_for_teo()
-
-    # 피해량 계수(기본 1 + 가산합 - 감소합) — 본 시뮬은 가산/감산 없음 → 1.0
+    # 공격자 공통: 피해량 계수(기본 1 + 가산합 - 감소합) — 본 시뮬은 가산/감산 없음 → 1.0
     dmg_increase_mult = max(0.0, 1.0 + DMG_INCREASE_ADD_SUM - DMG_INCREASE_REDUCE_SUM)
 
     # ========== (A) 버퍼 미채용 ==========
     eff_def_none, defcoeff_none = _effective_def_and_coeff(defender_name, stat_def, formation_name, extra_def_percent_from_buffer=0.0)
     damp_none = 0.0
+
+    # 내실 태오
+    atk_final_core = _atk_final_for_teo(TEO_STAT_ATK, TEO_BASE_ATK)
     dmg_block_on_none = _damage_pipeline(
-        atk_final, defcoeff_none, BLOCK_CRIT_MULT, TEO_SKILL_COEFF,
+        atk_final_core, defcoeff_none, BLOCK_CRIT_MULT, TEO_SKILL_COEFF,
         dmg_increase_mult, WEAK_MULT_CHASER, VULNERABILITY_PAI,
         reduce_taken_r, damp_none
     )
     dmg_block_off_none = _damage_pipeline(
-        atk_final, defcoeff_none, TEO_CRIT_MULT, TEO_SKILL_COEFF,
+        atk_final_core, defcoeff_none, TEO_CRIT_MULT, TEO_SKILL_COEFF,
+        dmg_increase_mult, WEAK_MULT_CHASER, VULNERABILITY_PAI,
+        reduce_taken_r, damp_none
+    )
+
+    # 속공 태오
+    atk_final_sok = _atk_final_for_teo(TEO_SOKGONG_STAT_ATK, TEO_SOKGONG_BASE_ATK)
+    dmg_block_on_none_sok = _damage_pipeline(
+        atk_final_sok, defcoeff_none, BLOCK_CRIT_MULT, TEO_SOKGONG_SKILL_COEFF,
+        dmg_increase_mult, WEAK_MULT_CHASER, VULNERABILITY_PAI,
+        reduce_taken_r, damp_none
+    )
+    dmg_block_off_none_sok = _damage_pipeline(
+        atk_final_sok, defcoeff_none, TEO_SOKGONG_CRIT_MULT, TEO_SOKGONG_SKILL_COEFF,
         dmg_increase_mult, WEAK_MULT_CHASER, VULNERABILITY_PAI,
         reduce_taken_r, damp_none
     )
@@ -278,13 +307,27 @@ def simulate_vs_teo(
         extra_def_percent_from_buffer=buff_info["def_percent"]
     )
     damp_buff = buff_info["dampening"]
+
+    # 내실 태오
     dmg_block_on_buff = _damage_pipeline(
-        atk_final, defcoeff_buff, BLOCK_CRIT_MULT, TEO_SKILL_COEFF,
+        atk_final_core, defcoeff_buff, BLOCK_CRIT_MULT, TEO_SKILL_COEFF,
         dmg_increase_mult, WEAK_MULT_CHASER, VULNERABILITY_PAI,
         reduce_taken_r, damp_buff
     )
     dmg_block_off_buff = _damage_pipeline(
-        atk_final, defcoeff_buff, TEO_CRIT_MULT, TEO_SKILL_COEFF,
+        atk_final_core, defcoeff_buff, TEO_CRIT_MULT, TEO_SKILL_COEFF,
+        dmg_increase_mult, WEAK_MULT_CHASER, VULNERABILITY_PAI,
+        reduce_taken_r, damp_buff
+    )
+
+    # 속공 태오
+    dmg_block_on_buff_sok = _damage_pipeline(
+        atk_final_sok, defcoeff_buff, BLOCK_CRIT_MULT, TEO_SOKGONG_SKILL_COEFF,
+        dmg_increase_mult, WEAK_MULT_CHASER, VULNERABILITY_PAI,
+        reduce_taken_r, damp_buff
+    )
+    dmg_block_off_buff_sok = _damage_pipeline(
+        atk_final_sok, defcoeff_buff, TEO_SOKGONG_CRIT_MULT, TEO_SOKGONG_SKILL_COEFF,
         dmg_increase_mult, WEAK_MULT_CHASER, VULNERABILITY_PAI,
         reduce_taken_r, damp_buff
     )
@@ -809,12 +852,12 @@ async def cmd_defense(ctx, *, argline: str):
 
         # 보기 좋은 출력
         embed = discord.Embed(
-            title="vs 내실 태오덱(전투력 83점 태오, 파이, 아일린) 상대 데미지 시뮬레이터",
+            title="vs 태오덱(태오, 파이, 아일린) 상대 데미지 시뮬레이터",
             description=f"입력: `{name}/{stat_def}/{block_rate_s}/{dtr_s}/{formation}`",
             color=0xA0522D
         )
         embed.add_field(
-            name="(버퍼 미채용시)",
+            name="(vs 내실 태오덱(전투력 83점 추적자 태오) - 버퍼 미채용)",
             value=(f"• 막기 **뜸** : **{n_on:,}**\n"
                    f"• 막기 **안 뜸** : **{n_off:,}**"),
             inline=False
@@ -822,9 +865,22 @@ async def cmd_defense(ctx, *, argline: str):
         embed.add_field(
             name=f"(버퍼-{buf} 채용시)",
             value=(f"• 막기 **뜸** : **{b_on:,}**  *(미채용 대비 {red_on}% 감소)*\n"
-                   f"• 막기 **안 뜸** : **{b_off:,}** *(미채용 대비 {red_off}% 감소)*"),
+                   f"• 막기 **안 뜸** : **{b_off:,}** *(미채용 대비 {red_off}% 감소)*\n"),
             inline=False
         )
+        embed.add_field(
+            name="(vs 속공 태오덱(전투력 63점 추적자 태오) - 버퍼 미채용)",
+            value=(f"• 막기 **뜸** : **{n_on_sok:,}**\n"
+                   f"• 막기 **안 뜸** : **{n_off_sok:,}**"),
+            inline=False
+        )
+        embed.add_field(
+            name=f"(vs 속공 태오덱 - 버퍼-{buf} 채용시)",
+            value=(f"• 막기 **뜸** : **{b_on_sok:,}**  *(미채용 대비 {red_on_sok}% 감소)*\n"
+                   f"• 막기 **안 뜸** : **{b_off_sok:,}** *(미채용 대비 {red_off_sok}% 감소)*"),
+            inline=False
+        )
+
         embed.set_footer(text="규칙: 파이크 6성 사용 가정 / 파이 아래 후 태오 아래 or 위 사용시 들어오는 데미지입니다.")
 
         await ctx.reply(embed=embed)
