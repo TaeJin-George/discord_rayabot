@@ -713,37 +713,56 @@ async def cmd_defense(ctx, *, argline: str):
         b_on_sok = result["buff"]["sok_block_on"]; b_off_sok = result["buff"]["sok_block_off"]
         red_on_sok = result["buff"]["sok_reduced_on_pct"]; red_off_sok = result["buff"]["sok_reduced_off_pct"]
 
+                # 보기 좋은 출력 (임베드: 문구/레이아웃 커스텀)
         embed = discord.Embed(
-            title="vs 태오덱(태오, 파이, 아일린) 상대 데미지 시뮬레이터",
-            description=(f"입력: `{name}/{stat_def}/{block_rate_s}/{dtr_s}/{formation}`\n"
-                         f"자체 버프/디버프 자동 적용(앨리스/루디/챈슬러/아라곤) + 보조 버퍼 1명({buf})"),
+            title="vs 태오덱 상대 데미지 시뮬레이터",
+            description=(
+                f"입력: {name}/ {stat_def}/ {block_rate_s}/ {dtr_s}/ {formation}\n\n"
+                "공격자: 내실(공4458, 치피264) & 속공(공4088, 치피210)"
+                " — 추적자·이린펫·보호뒷줄·파이·아일린"
+            ),
             color=0xA0522D
         )
+
+        # 내실 태오 - 미채용
         embed.add_field(
-            name="(내실 태오 - 버퍼 미채용)",
-            value=(f"• 막기 **뜸** : **{n_on:,}**\n"
-                   f"• 막기 **안 뜸** : **{n_off:,}**"),
+            name="(내실 태오 - 방어 버퍼 미채용)",
+            value=(
+                f"• 막기 뜸 : **{n_on:,}**\n"
+                f"• 막기 안뜸 : **{n_off:,}**"
+            ),
             inline=False
         )
+        # 내실 태오 - 보조 버퍼
         embed.add_field(
-            name=f"(내실 태오 - 버퍼-{buf} 채용시)",
-            value=(f"• 막기 **뜸** : **{b_on:,}**  *(미채용 대비 {red_on}% 감소)*\n"
-                   f"• 막기 **안 뜸** : **{b_off:,}** *(미채용 대비 {red_off}% 감소)*"),
+            name=f"(내실 태오 - 방어 버퍼-{buf} 채용시 최종딜 {red_off:.1f}% 감소)",
+            value=(
+                f"• 막기 뜸 : **{b_on:,}**\n"
+                f"• 막기 안뜸 : **{b_off:,}**"
+            ),
             inline=False
         )
+        # 속공 태오 - 미채용
         embed.add_field(
-            name="(속공 태오 - 버퍼 미채용)",
-            value=(f"• 막기 **뜸** : **{n_on_sok:,}**\n"
-                   f"• 막기 **안 뜸** : **{n_off_sok:,}**"),
+            name="(속공 태오 - 방어 버퍼 미채용)",
+            value=(
+                f"• 막기 뜸 : **{n_on_sok:,}**\n"
+                f"• 막기 안뜸 : **{n_off_sok:,}**"
+            ),
             inline=False
         )
+        # 속공 태오 - 보조 버퍼
         embed.add_field(
-            name=f"(속공 태오 - 버퍼-{buf} 채용시)",
-            value=(f"• 막기 **뜸** : **{b_on_sok:,}**  *(미채용 대비 {red_on_sok}% 감소)*\n"
-                   f"• 막기 **안 뜸** : **{b_off_sok:,}** *(미채용 대비 {red_off_sok}% 감소)*"),
+            name=f"(속공 태오 - 방어 버퍼-{buf} 채용시 최종딜 {red_off_sok:.1f}% 감소)",
+            value=(
+                f"• 막기 뜸 : **{b_on_sok:,}**\n"
+                f"• 막기 안뜸 : **{b_off_sok:,}**"
+            ),
             inline=False
         )
-        embed.set_footer(text="규칙: 단계별 절사, 공퍼/피증은 기본 1에서 시작, 루디 감쇄는 최종 곱(×0.84)")
+
+        # 하단 주석
+        embed.set_footer(text="파이 아래 후 태오 위 or 아래 쓸때 들어오는 데미지입니다.")
         await ctx.reply(embed=embed)
     except Exception:
         logger.error("!방어력 오류:\n" + traceback.format_exc())
