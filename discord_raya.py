@@ -31,10 +31,10 @@ print("=== 파일 목록:", os.listdir(os.getcwd()))
 # 전역 상수/레퍼런스 규칙
 # =========================
 
-# (A) 공격자(내실 태오덱) 상수 — 고정
+# (A1) 공격자(내실 태오덱) 상수 — 고정
 TEO_STAT_ATK = 4458
 TEO_BASE_ATK = 1500
-TEO_CRIT_MULT = 2.64            # 태오 기본 치명배수(기본 1.5 대신 캐릭 오버라이드)
+TEO_CRIT_MULT = 2.64            # 태오 치명배수(항상 치명)
 TEO_SKILL_COEFF = 1.70          # 스킬 계수 170%
 PET_ATTACK_FLAT = 1119          # 이린 펫 깡공
 PET_ATTACK_PERCENT = 0.21       # 이린 펫 공퍼 +21%
@@ -42,7 +42,7 @@ FORMATION_ATTACK_PERCENT = 0.42 # 보호 진형 뒷줄 +42%
 ATTACK_PERCENT_BUFFS = 0.25     # 아일린 +25% (공퍼 합산)
 # 공격력% 총합(기본 1에서 시작, 증가합 - 감소합): 1 + (0.21 + 0.25) = 1.46
 ATK_MULT_INCREASE_SUM = PET_ATTACK_PERCENT + ATTACK_PERCENT_BUFFS
-# 피해량 계수(기본 1, 복수자/반지 없음, 챈슬러 감산 없음 => 1.0)
+# 피해량 계수(기본 1, 복수자/반지 없음, 챈슬러 감산 없음 → 1.0)
 DMG_INCREASE_ADD_SUM = 0.0
 DMG_INCREASE_REDUCE_SUM = 0.0   # (챈슬러 -13%) 미채용
 WEAK_MULT_CHASER = 1.65         # 추적자 세트 약점 배수
@@ -50,13 +50,12 @@ VULNERABILITY_PAI = 1.20        # 파이 물리 취약
 DEF_SHRED_VANESSA = 0.29        # 바네사 방깎 29%
 DEF_PENETRATION = 0.0           # 방무 없음
 
-# (A2) 속공 태오덱 상수
+# (A2) 공격자(속공 태오덱) 상수 — 사용자 지정
+# 스펙: 공 4088, 치피 210%, 약확 100, 추적자(기타 동일)
 TEO_SOKGONG_STAT_ATK = 4088
 TEO_SOKGONG_BASE_ATK = 1500
-TEO_SOKGONG_CRIT_MULT = 2.64
-TEO_SOKGONG_CRIT_DMG = 210  # %
-TEO_SOKGONG_SKILL_COEFF = 1.70
-# 펫/세트/버프/진형은 동일 (이린 1119, 공퍼 21%, 아일린 25%, 보호뒷줄42, 추적자, 파이, 바네사)
+TEO_SOKGONG_CRIT_MULT = 2.10    # 치피 210% → 배수 2.10
+TEO_SOKGONG_SKILL_COEFF = 1.70  # 동일
 
 # (B) 방어측 공통(펫/진형/버퍼)
 PET_DEFENSE_PERCENT = 0.13      # 펫 방어% +13%
@@ -88,10 +87,9 @@ BASE_DEF_BY_CHAR = {
 
 # (C) 계산 규칙 상수
 DEF_COEFF_PER_DEF = 0.00214     # DEFcoeff = 1 + floor(effective_def) * 0.00214
-BASIC_CRIT_MULT = 1.50           # 참고: 기본 치명배수(캐릭 오버라이드로 태오는 2.64)
+BASIC_CRIT_MULT = 1.50           # 참고: 기본 치명배수(캐릭 오버라이드로 태오는 별도)
 BLOCK_CRIT_MULT = 1.0            # 막기 성공 시 치명 → 일반 처리
 ROUND_FLOOR = True               # 각 단계 floor
-
 
 # 캐릭터별 100점 상한 (기존 유지)
 SCORE_CAP = {
@@ -102,6 +100,7 @@ SCORE_CAP = {
     "세인": 40102,
     "파스칼": 44099,
 }
+
 
 # -----------------------------
 # 기존 딜러 계산 로직 (유지)
@@ -120,7 +119,7 @@ def normalize_set(name: str):
     if name == "추적자":
         return WEAK_MULT_CHASER, 1.0
     if name == "복수자":
-        return 1.30, 1.30  # 약점1.3, 피해량1.3 (레거시 지원 — 실제 본 봇에서는 추적자/복수자 고정 사용)
+        return 1.30, 1.30  # 약점1.3, 피해량1.3 (레거시 지원)
     return 1.30, 1.0
 
 def final_attack(stat_atk: float, character: str) -> float:
@@ -179,22 +178,14 @@ def score_from_cap(character: str, value: float) -> float:
 def floor(x: float) -> int:
     return math.floor(x) if ROUND_FLOOR else x
 
-def _atk_final_for_teo() -> int:
+def _atk_final_for_teo(stat_atk: int, base_atk: int) -> int:
     """
-    ATK_final = floor( (TEO_STAT_ATK + PET_ATTACK_FLAT + BASE_ATK*0.42) * (1 + 0.21 + 0.25 - 감소합) )
-    (감소합=0 가정)
+    ATK_final = floor( (stat_atk + PET_ATTACK_FLAT + base_atk*0.42) * (1 + 0.21 + 0.25 - 감소합) )
     """
-    formation_flat = TEO_BASE_ATK * FORMATION_ATTACK_PERCENT
+    formation_flat = base_atk * FORMATION_ATTACK_PERCENT
     mult_atk_pct = max(0.0, 1.0 + ATK_MULT_INCREASE_SUM)  # 감소 없음 → 1 + 0.46
-    val = (TEO_STAT_ATK + PET_ATTACK_FLAT + formation_flat) * mult_atk_pct
+    val = (stat_atk + PET_ATTACK_FLAT + formation_flat) * mult_atk_pct
     return floor(val)
-
-def _atk_final_for_sokgong_teo() -> int:
-    formation_flat = TEO_SOKGONG_BASE_ATK * FORMATION_ATTACK_PERCENT
-    mult_atk_pct = max(0.0, 1.0 + ATK_MULT_INCREASE_SUM)
-    val = (TEO_SOKGONG_STAT_ATK + PET_ATTACK_FLAT + formation_flat) * mult_atk_pct
-    return floor(val)
-
 
 def _effective_def_and_coeff(
     defender_name: str,
@@ -341,6 +332,9 @@ def simulate_vs_teo(
     red_on = pct_reduced(dmg_block_on_buff, dmg_block_on_none)
     red_off = pct_reduced(dmg_block_off_buff, dmg_block_off_none)
 
+    red_on_sok = pct_reduced(dmg_block_on_buff_sok, dmg_block_on_none_sok)
+    red_off_sok = pct_reduced(dmg_block_off_buff_sok, dmg_block_off_none_sok)
+
     return {
         "friend_buffer": friend_buffer,
         "none": {
@@ -348,6 +342,8 @@ def simulate_vs_teo(
             "block_off": dmg_block_off_none,
             "eff_def": eff_def_none,
             "defcoeff": defcoeff_none,
+            "sok_block_on": dmg_block_on_none_sok,
+            "sok_block_off": dmg_block_off_none_sok,
         },
         "buff": {
             "block_on": dmg_block_on_buff,
@@ -356,6 +352,10 @@ def simulate_vs_teo(
             "defcoeff": defcoeff_buff,
             "reduced_on_pct": red_on,
             "reduced_off_pct": red_off,
+            "sok_block_on": dmg_block_on_buff_sok,
+            "sok_block_off": dmg_block_off_buff_sok,
+            "sok_reduced_on_pct": red_on_sok,
+            "sok_reduced_off_pct": red_off_sok,
         }
     }
 
@@ -597,7 +597,7 @@ async def help_cmd(ctx: commands.Context):
             value=(
                 "`!방어력 캐릭/스탯방어력/막기확률/받피감/진형`\n"
                 "예) `!방어력 플라튼/1800/100%/33%/밸런스`\n"
-                "→ 내실 태오덱 기준으로, **막기 뜸/안 뜸** 데미지 및\n"
+                "→ 내실 태오 & 속공 태오 기준으로, **막기 뜸/안 뜸** 데미지와\n"
                 "  방어 버퍼(루디 또는 앨리스) 채용 시 감소율을 함께 보여줍니다."
             ),
             inline=False
@@ -738,8 +738,8 @@ async def manual_cmd(ctx: commands.Context):
                 "• **슬래시(/)** 로 구분합니다.\n"
                 "• 형식: `!방어력 캐릭/스탯방어력/막기확률/받피감/진형`\n"
                 "• 예) `!방어력 플라튼/1800/100%/33%/밸런스`\n"
-                "  ↳ 막기 뜸/안 뜸 데미지, 그리고 방어 버퍼(루디/앨리스) 1명 채용 시 감소율을 함께 표시합니다.\n"
-                "• 현재는 플라튼, 루디, 앨리스, 스파이크, 아라곤, 챈슬러만 지원합니다.`\n"
+                "  ↳ **내실 태오 / 속공 태오** 모두에 대해 막기 뜸/안 뜸 데미지와\n"
+                "     방어 버퍼(루디/앨리스) 1명 채용 시 감소율을 함께 표시합니다."
             ),
             inline=False
         )
@@ -753,6 +753,11 @@ async def manual_cmd(ctx: commands.Context):
 
 @bot.command(name="전투력")
 async def cmd_power(ctx, *, argline: str):
+    """
+    사용법:
+    !전투력 캐릭터/스탯공격력/치확/치피/약확/세트옵션
+    예) !전투력 태오/5338/5%/174%/20%/복수자
+    """
     try:
         parts = [p.strip() for p in argline.split('/')]
         if len(parts) != 6:
@@ -825,7 +830,7 @@ async def cmd_defense(ctx, *, argline: str):
         # 수치 파싱
         try:
             stat_def = int(float(stat_def_s))
-            block_rate = parse_percent(block_rate_s)  # 현재 출력은 막기/비막기 모두, 확률값은 참고용
+            block_rate = parse_percent(block_rate_s)  # 현재 출력은 막기/비막기 모두, 확률은 표기만
             reduce_taken_r = parse_percent(dtr_s)
         except ValueError:
             return await ctx.reply("❌ 숫자 형식이 올바르지 않습니다. 예) `100%`, `33%` 처럼 % 포함")
@@ -843,45 +848,54 @@ async def cmd_defense(ctx, *, argline: str):
         )
 
         buf = result["friend_buffer"]
+        # 내실
         n_on = result["none"]["block_on"]
         n_off = result["none"]["block_off"]
         b_on = result["buff"]["block_on"]
         b_off = result["buff"]["block_off"]
         red_on = result["buff"]["reduced_on_pct"]
         red_off = result["buff"]["reduced_off_pct"]
+        # 속공
+        n_on_sok = result["none"]["sok_block_on"]
+        n_off_sok = result["none"]["sok_block_off"]
+        b_on_sok = result["buff"]["sok_block_on"]
+        b_off_sok = result["buff"]["sok_block_off"]
+        red_on_sok = result["buff"]["sok_reduced_on_pct"]
+        red_off_sok = result["buff"]["sok_reduced_off_pct"]
 
         # 보기 좋은 출력
         embed = discord.Embed(
-            title="vs 태오덱(태오, 파이, 아일린) 상대 데미지 시뮬레이터",
-            description=f"입력: `{name}/{stat_def}/{block_rate_s}/{dtr_s}/{formation}`",
+            title="vs 태오덱 상대 데미지 시뮬레이터",
+            description=f"입력: `{name}/{stat_def}/{block_rate_s}/{dtr_s}/{formation}`\n"
+                        f"공격자: 내실(공4458, 치피264) & 속공(공4088, 치피210) — 추적자·이린펫·보호뒷줄·파이·바네사 동일",
             color=0xA0522D
         )
         embed.add_field(
-            name="(vs 내실 태오덱(전투력 83점 추적자 태오) - 버퍼 미채용)",
+            name="(내실 태오 - 버퍼 미채용)",
             value=(f"• 막기 **뜸** : **{n_on:,}**\n"
                    f"• 막기 **안 뜸** : **{n_off:,}**"),
             inline=False
         )
         embed.add_field(
-            name=f"(버퍼-{buf} 채용시)",
+            name=f"(내실 태오 - 버퍼-{buf} 채용시)",
             value=(f"• 막기 **뜸** : **{b_on:,}**  *(미채용 대비 {red_on}% 감소)*\n"
-                   f"• 막기 **안 뜸** : **{b_off:,}** *(미채용 대비 {red_off}% 감소)*\n"),
+                   f"• 막기 **안 뜸** : **{b_off:,}** *(미채용 대비 {red_off}% 감소)*"),
             inline=False
         )
+        # 추가: 속공 태오 4줄
         embed.add_field(
-            name="(vs 속공 태오덱(전투력 63점 추적자 태오) - 버퍼 미채용)",
+            name="(속공 태오 - 버퍼 미채용)",
             value=(f"• 막기 **뜸** : **{n_on_sok:,}**\n"
                    f"• 막기 **안 뜸** : **{n_off_sok:,}**"),
             inline=False
         )
         embed.add_field(
-            name=f"(vs 속공 태오덱 - 버퍼-{buf} 채용시)",
+            name=f"(속공 태오 - 버퍼-{buf} 채용시)",
             value=(f"• 막기 **뜸** : **{b_on_sok:,}**  *(미채용 대비 {red_on_sok}% 감소)*\n"
                    f"• 막기 **안 뜸** : **{b_off_sok:,}** *(미채용 대비 {red_off_sok}% 감소)*"),
             inline=False
         )
-
-        embed.set_footer(text="규칙: 파이크 6성 사용 가정 / 파이 아래 후 태오 아래 or 위 사용시 들어오는 데미지입니다.")
+        embed.set_footer(text="규칙: 단계별 절사, 공퍼/피증은 기본 1에서 시작, 루디 감쇄는 최종 곱(×0.84)")
 
         await ctx.reply(embed=embed)
     except Exception:
@@ -906,6 +920,7 @@ async def on_command_error(ctx: commands.Context, error: Exception):
 
 if __name__ == "__main__":
     load_dotenv()
+    TOKEN = os.getenv("DISCORD_TOKEN", "")
     if not TOKEN:
         logger.error("DISCORD_TOKEN 이 설정되지 않았습니다 (.env/환경변수 확인)")
     else:
