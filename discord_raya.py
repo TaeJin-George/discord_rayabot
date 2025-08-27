@@ -695,7 +695,8 @@ async def manual_cmd(ctx: commands.Context):
                 "• **슬래시(/)** 로 구분합니다.\n"
                 "• 형식: `!방어력 캐릭/스탯방어력/막기확률/받피감/진형`\n"
                 "• 예) `!방어력 플라튼/1800/100%/33%/밸런스`\n"
-                "  ↳ 막기 뜸/안 뜸 데미지, 그리고 방어 버퍼(루디/앨리스) 1명 채용 시 감소율을 함께 표시합니다."
+                "  ↳ 막기 뜸/안 뜸 데미지, 그리고 방어 버퍼(루디/앨리스) 1명 채용 시 감소율을 함께 표시합니다.\n"
+                "• 현재는 플라튼, 루디, 앨리스, 스파이크, 아라곤, 챈슬러만 지원합니다.`\n"
             ),
             inline=False
         )
@@ -808,7 +809,7 @@ async def cmd_defense(ctx, *, argline: str):
 
         # 보기 좋은 출력
         embed = discord.Embed(
-            title="vs 내실 태오덱 상대 데미지 시뮬레이터",
+            title="vs 내실 태오덱(전투력 83점 태오, 파이, 아일린) 상대 데미지 시뮬레이터",
             description=f"입력: `{name}/{stat_def}/{block_rate_s}/{dtr_s}/{formation}`",
             color=0xA0522D
         )
@@ -824,7 +825,7 @@ async def cmd_defense(ctx, *, argline: str):
                    f"• 막기 **안 뜸** : **{b_off:,}** *(미채용 대비 {red_off}% 감소)*"),
             inline=False
         )
-        embed.set_footer(text="규칙: 단계별 절사, 공퍼/피증은 기본 1에서 시작, 루디 감쇄는 최종 곱(×0.84)")
+        embed.set_footer(text="규칙: 파이크 6성 사용 가정 / 파이 아래 후 태오 아래 or 위 사용시 들어오는 데미지입니다.")
 
         await ctx.reply(embed=embed)
     except Exception:
