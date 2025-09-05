@@ -436,62 +436,86 @@ class DataStore:
             logger.error("데이터 로드 실패:\n" + traceback.format_exc())
             self.df = None
 
-    def search_counters(
-        self,
-        defense_team_input: List[str],
-        defense_skills_input: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
-        results: List[Dict[str, Any]] = []
-        try:
-            if self.df is None or self.df.empty:
-                return results
-
-            input_sorted = team_exact(defense_team_input)
-            if len(input_sorted) != 3:
-                return results
-
-            want_def_skills = None
-            if defense_skills_input:
-                want_def_skills = skills_order_exact(defense_skills_input)
-                if len(want_def_skills) != 3:
+        def search_counters(
+            self,
+            defense_team_input: List[str],
+            defense_skills_input: Optional[List[str]] = None,
+        ) -> List[Dict[str, Any]]:
+            results: List[Dict[str, Any]] = []
+            try:
+                if self.df is None or self.df.empty:
                     return results
-
-            for _, row in self.df.iterrows():
-                defense_team = team_exact([
-                    row.get("방어덱1"),
-                    row.get("방어덱2"),
-                    row.get("방어덱3"),
-                ])
-                if defense_team != input_sorted:
-                    continue
-
-                if want_def_skills is not None:
-                    row_def_skills = skills_order_exact([
-                        row.get("스킬1"),
-                        row.get("스킬2"),
-                        row.get("스킬3"),
+        
+                # 방어덱/방어 스킬 정확 일치(정렬 규칙은 기존 helper 사용)
+                input_sorted = team_exact(defense_team_input)
+                if len(input_sorted) != 3:
+                    return results
+        
+                want_def_skills = None
+                if defense_skills_input:
+                    want_def_skills = skills_order_exact(defense_skills_input)
+                    if len(want_def_skills) != 3:
+                        return results
+        
+                # 중복 제거용 키 저장: (선공, 공격 스킬 튜플, 공격덱 셋[순서 무시])
+                seen: set[tuple] = set()
+        
+                for _, row in self.df.iterrows():
+                    defense_team = team_exact([
+                        row.get("방어덱1"),
+                        row.get("방어덱2"),
+                        row.get("방어덱3"),
                     ])
-                    if row_def_skills != want_def_skills:
+                    if defense_team != input_sorted:
                         continue
-
-                counters = {
-                    "선공": _s(row.get("선공")) or "정보 없음",
-                    "조합": [
+        
+                    if want_def_skills is not None:
+                        row_def_skills = skills_order_exact([
+                            row.get("스킬1"),
+                            row.get("스킬2"),
+                            row.get("스킬3"),
+                        ])
+                        if row_def_skills != want_def_skills:
+                            continue
+        
+                    # 출력용/비교용 값 생성
+                    first = _s(row.get("선공")) or "정보 없음"
+        
+                    atk_team_list = [
                         _s(row.get("공격덱1")),
                         _s(row.get("공격덱2")),
                         _s(row.get("공격덱3")),
-                    ],
-                    "스킬": [
+                    ]
+                    # None/빈값 제거 없이 비교 시 오류를 막기 위해 helper로 정규화
+                    atk_team_key = tuple(team_exact(atk_team_list))  # 순서 무시(정규화된 3개)
+        
+                    atk_skills_list = [
                         _s(row.get("스킬1.1")),
                         _s(row.get("스킬2.1")),
                         _s(row.get("스킬3.1")),
-                    ],
-                }
-                if any(counters["조합"]) or any(counters["스킬"]):
-                    results.append(counters)
-        except Exception:
-            logger.error("search_counters 오류:\n" + traceback.format_exc())
-        return results
+                    ]
+                    atk_skills_key = tuple(skills_order_exact(atk_skills_list))  # 순서 보존
+        
+                    # 중복 판단 키
+                    dedup_key = (first, atk_skills_key, atk_team_key)
+        
+                    if dedup_key in seen:
+                        # 중복이면 skip
+                        continue
+                    seen.add(dedup_key)
+        
+                    counters = {
+                        "선공": first,
+                        "조합": list(atk_team_key),     # 이미 정규화(순서 무시의 대표순서)
+                        "스킬": list(atk_skills_key),   # 입력 순서 보존
+                    }
+        
+                    if any(counters["조합"]) or any(counters["스킬"]):
+                        results.append(counters)
+        
+            except Exception:
+                logger.error("search_counters 오류:\n" + traceback.format_exc())
+            return results
 
 # =========================
 # 디스코드 봇
