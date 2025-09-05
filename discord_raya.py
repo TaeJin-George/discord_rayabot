@@ -436,6 +436,18 @@ class DataStore:
             logger.error("데이터 로드 실패:\n" + traceback.format_exc())
             self.df = None
 
+        def _canon_team_key(names: List[str]) -> tuple:
+            # 공격덱: 순서 무시용 키 (정렬된 튜플)
+            clean = [_s(n) for n in names]
+            clean = [c for c in clean if c]  # 빈값 제거
+            return tuple(sorted(clean))      # 순서 무관 비교
+        
+        def _canon_skill_seq(skills: List[str]) -> tuple:
+            # 스킬: 순서 그대로 비교 (길이 맞추기 위해 빈 문자열 유지)
+            clean = [_s(s) or "" for s in skills]
+            # 정확히 3개가 아니어도 동일 길이/순서라면 같은 키가 되도록 그대로 튜플화
+            return tuple(clean)
+        
         def search_counters(
             self,
             defense_team_input: List[str],
@@ -446,7 +458,6 @@ class DataStore:
                 if self.df is None or self.df.empty:
                     return results
         
-                # 방어덱/방어 스킬 정확 일치(정렬 규칙은 기존 helper 사용)
                 input_sorted = team_exact(defense_team_input)
                 if len(input_sorted) != 3:
                     return results
@@ -457,8 +468,7 @@ class DataStore:
                     if len(want_def_skills) != 3:
                         return results
         
-                # 중복 제거용 키 저장: (선공, 공격 스킬 튜플, 공격덱 셋[순서 무시])
-                seen: set[tuple] = set()
+                seen: set = set()
         
                 for _, row in self.df.iterrows():
                     defense_team = team_exact([
@@ -478,44 +488,41 @@ class DataStore:
                         if row_def_skills != want_def_skills:
                             continue
         
-                    # 출력용/비교용 값 생성
                     first = _s(row.get("선공")) or "정보 없음"
         
-                    atk_team_list = [
+                    # 표시용(원본 유지)
+                    atk_team_disp = [
                         _s(row.get("공격덱1")),
                         _s(row.get("공격덱2")),
                         _s(row.get("공격덱3")),
                     ]
-                    # None/빈값 제거 없이 비교 시 오류를 막기 위해 helper로 정규화
-                    atk_team_key = tuple(team_exact(atk_team_list))  # 순서 무시(정규화된 3개)
-        
-                    atk_skills_list = [
+                    atk_skills_disp = [
                         _s(row.get("스킬1.1")),
                         _s(row.get("스킬2.1")),
                         _s(row.get("스킬3.1")),
                     ]
-                    atk_skills_key = tuple(skills_order_exact(atk_skills_list))  # 순서 보존
         
-                    # 중복 판단 키
+                    # 비교용(정규화된 키)
+                    atk_team_key   = _canon_team_key(atk_team_disp)     # 순서 무시
+                    atk_skills_key = _canon_skill_seq(atk_skills_disp)  # 순서 유지
+        
                     dedup_key = (first, atk_skills_key, atk_team_key)
-        
                     if dedup_key in seen:
-                        # 중복이면 skip
                         continue
                     seen.add(dedup_key)
         
                     counters = {
                         "선공": first,
-                        "조합": list(atk_team_key),     # 이미 정규화(순서 무시의 대표순서)
-                        "스킬": list(atk_skills_key),   # 입력 순서 보존
+                        "조합": atk_team_disp,     # 첫 발견 행의 표기를 그대로 노출
+                        "스킬": atk_skills_disp,   # "
                     }
-        
                     if any(counters["조합"]) or any(counters["스킬"]):
                         results.append(counters)
         
             except Exception:
                 logger.error("search_counters 오류:\n" + traceback.format_exc())
             return results
+
 
 # =========================
 # 디스코드 봇
