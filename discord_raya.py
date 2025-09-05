@@ -436,92 +436,92 @@ class DataStore:
             logger.error("데이터 로드 실패:\n" + traceback.format_exc())
             self.df = None
 
-        def _canon_team_key(names: List[str]) -> tuple:
-            # 공격덱: 순서 무시용 키 (정렬된 튜플)
-            clean = [_s(n) for n in names]
-            clean = [c for c in clean if c]  # 빈값 제거
-            return tuple(sorted(clean))      # 순서 무관 비교
-        
-        def _canon_skill_seq(skills: List[str]) -> tuple:
-            # 스킬: 순서 그대로 비교 (길이 맞추기 위해 빈 문자열 유지)
-            clean = [_s(s) or "" for s in skills]
-            # 정확히 3개가 아니어도 동일 길이/순서라면 같은 키가 되도록 그대로 튜플화
-            return tuple(clean)
-        
-        def search_counters(
-            self,
-            defense_team_input: List[str],
-            defense_skills_input: Optional[List[str]] = None,
-        ) -> List[Dict[str, Any]]:
-            results: List[Dict[str, Any]] = []
-            try:
-                if self.df is None or self.df.empty:
+    def _canon_team_key(names: List[str]) -> tuple:
+        # 공격덱: 순서 무시용 키 (정렬된 튜플)
+        clean = [_s(n) for n in names]
+        clean = [c for c in clean if c]  # 빈값 제거
+        return tuple(sorted(clean))      # 순서 무관 비교
+    
+    def _canon_skill_seq(skills: List[str]) -> tuple:
+        # 스킬: 순서 그대로 비교 (길이 맞추기 위해 빈 문자열 유지)
+        clean = [_s(s) or "" for s in skills]
+        # 정확히 3개가 아니어도 동일 길이/순서라면 같은 키가 되도록 그대로 튜플화
+        return tuple(clean)
+    
+    def search_counters(
+        self,
+        defense_team_input: List[str],
+        defense_skills_input: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        try:
+            if self.df is None or self.df.empty:
+                return results
+    
+            input_sorted = team_exact(defense_team_input)
+            if len(input_sorted) != 3:
+                return results
+    
+            want_def_skills = None
+            if defense_skills_input:
+                want_def_skills = skills_order_exact(defense_skills_input)
+                if len(want_def_skills) != 3:
                     return results
-        
-                input_sorted = team_exact(defense_team_input)
-                if len(input_sorted) != 3:
-                    return results
-        
-                want_def_skills = None
-                if defense_skills_input:
-                    want_def_skills = skills_order_exact(defense_skills_input)
-                    if len(want_def_skills) != 3:
-                        return results
-        
-                seen: set = set()
-        
-                for _, row in self.df.iterrows():
-                    defense_team = team_exact([
-                        row.get("방어덱1"),
-                        row.get("방어덱2"),
-                        row.get("방어덱3"),
+    
+            seen: set = set()
+    
+            for _, row in self.df.iterrows():
+                defense_team = team_exact([
+                    row.get("방어덱1"),
+                    row.get("방어덱2"),
+                    row.get("방어덱3"),
+                ])
+                if defense_team != input_sorted:
+                    continue
+    
+                if want_def_skills is not None:
+                    row_def_skills = skills_order_exact([
+                        row.get("스킬1"),
+                        row.get("스킬2"),
+                        row.get("스킬3"),
                     ])
-                    if defense_team != input_sorted:
+                    if row_def_skills != want_def_skills:
                         continue
-        
-                    if want_def_skills is not None:
-                        row_def_skills = skills_order_exact([
-                            row.get("스킬1"),
-                            row.get("스킬2"),
-                            row.get("스킬3"),
-                        ])
-                        if row_def_skills != want_def_skills:
-                            continue
-        
-                    first = _s(row.get("선공")) or "정보 없음"
-        
-                    # 표시용(원본 유지)
-                    atk_team_disp = [
-                        _s(row.get("공격덱1")),
-                        _s(row.get("공격덱2")),
-                        _s(row.get("공격덱3")),
-                    ]
-                    atk_skills_disp = [
-                        _s(row.get("스킬1.1")),
-                        _s(row.get("스킬2.1")),
-                        _s(row.get("스킬3.1")),
-                    ]
-        
-                    # 비교용(정규화된 키)
-                    atk_team_key   = _canon_team_key(atk_team_disp)     # 순서 무시
-                    atk_skills_key = _canon_skill_seq(atk_skills_disp)  # 순서 유지
-        
-                    dedup_key = (first, atk_skills_key, atk_team_key)
-                    if dedup_key in seen:
-                        continue
-                    seen.add(dedup_key)
-        
-                    counters = {
-                        "선공": first,
-                        "조합": atk_team_disp,     # 첫 발견 행의 표기를 그대로 노출
-                        "스킬": atk_skills_disp,   # "
-                    }
-                    if any(counters["조합"]) or any(counters["스킬"]):
-                        results.append(counters)
-        
-            except Exception:
-                logger.error("search_counters 오류:\n" + traceback.format_exc())
-            return results
+    
+                first = _s(row.get("선공")) or "정보 없음"
+    
+                # 표시용(원본 유지)
+                atk_team_disp = [
+                    _s(row.get("공격덱1")),
+                    _s(row.get("공격덱2")),
+                    _s(row.get("공격덱3")),
+                ]
+                atk_skills_disp = [
+                    _s(row.get("스킬1.1")),
+                    _s(row.get("스킬2.1")),
+                    _s(row.get("스킬3.1")),
+                ]
+    
+                # 비교용(정규화된 키)
+                atk_team_key   = _canon_team_key(atk_team_disp)     # 순서 무시
+                atk_skills_key = _canon_skill_seq(atk_skills_disp)  # 순서 유지
+    
+                dedup_key = (first, atk_skills_key, atk_team_key)
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+    
+                counters = {
+                    "선공": first,
+                    "조합": atk_team_disp,     # 첫 발견 행의 표기를 그대로 노출
+                    "스킬": atk_skills_disp,   # "
+                }
+                if any(counters["조합"]) or any(counters["스킬"]):
+                    results.append(counters)
+    
+        except Exception:
+            logger.error("search_counters 오류:\n" + traceback.format_exc())
+        return results
 
 
 # =========================
