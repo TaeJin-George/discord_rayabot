@@ -374,6 +374,36 @@ def team_exact(maybe3: List[Any]) -> List[str]:
 def skills_order_exact(maybe3: List[Any]) -> List[str]:
     return [s_no_strip(x) for x in maybe3 if s_no_strip(x) != ""]
 
+from typing import Sequence, Tuple, Optional
+
+def _canon_team_key(names: Sequence[Optional[str]]) -> Tuple[str, ...]:
+    """공격덱: 순서 무시 비교용 키(정렬된 튜플, 공백 정리)"""
+    clean = []
+    for n in names:
+        s = _s(n)  # 공백 정리
+        if s:
+            clean.append(s)
+    return tuple(sorted(clean))  # 순서 무관
+
+def _canon_skill_seq(skills: Sequence[Optional[str]]) -> Tuple[str, ...]:
+    """스킬: 순서 그대로 비교용 키(길이 3 고정)"""
+    clean = [(_s(s) or "") for s in skills]
+    if len(clean) < 3:
+        clean += [""] * (3 - len(clean))
+    elif len(clean) > 3:
+        clean = clean[:3]
+    return tuple(clean)  # 순서 보존
+
+def _canon_first(v: Optional[str]) -> str:
+    """선공/후공 표기 정규화"""
+    t = (_s(v) or "").strip()
+    t0 = t.lower().replace(" ", "")
+    if t0 in ("선공", "first"):
+        return "선공"
+    if t0 in ("후공", "second"):
+        return "후공"
+    return t or "정보 없음"
+
 # -----------------------------
 # 데이터 로더
 # -----------------------------
@@ -435,18 +465,6 @@ class DataStore:
         except Exception:
             logger.error("데이터 로드 실패:\n" + traceback.format_exc())
             self.df = None
-
-    def _canon_team_key(names: List[str]) -> tuple:
-        # 공격덱: 순서 무시용 키 (정렬된 튜플)
-        clean = [_s(n) for n in names]
-        clean = [c for c in clean if c]  # 빈값 제거
-        return tuple(sorted(clean))      # 순서 무관 비교
-    
-    def _canon_skill_seq(skills: List[str]) -> tuple:
-        # 스킬: 순서 그대로 비교 (길이 맞추기 위해 빈 문자열 유지)
-        clean = [_s(s) or "" for s in skills]
-        # 정확히 3개가 아니어도 동일 길이/순서라면 같은 키가 되도록 그대로 튜플화
-        return tuple(clean)
     
     def search_counters(
         self,
