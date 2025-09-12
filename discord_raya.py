@@ -698,25 +698,46 @@ async def manual_cmd(ctx: commands.Context):
 
 @bot.command(name="전투력")
 async def cmd_power(ctx, *, argline: str):
-    ...
-    atk, dmg_w, dmg_nw, dmg_exp, dmg_blk = compute_damage(
-        character, stat_atk, crit_rate, crit_dmg, weak_rate, set_name
-    )
-    score_w   = score_from_cap(character, dmg_w)
-    score_nw  = score_from_cap(character, dmg_nw)
-    score_av  = score_from_cap(character, dmg_exp)
-    score_blk = score_from_cap(character, dmg_blk)
+    try:
+        parts = [p.strip() for p in argline.split('/')]
+        if len(parts) != 6:
+            return await ctx.reply("❌ 형식: `!전투력 캐릭/스탯공/치확/치피/약확/세트`")
 
-    if character == "콜트":
-        # 콜트는 원래 치명/약점이 비활성이라 블록 값=기대값 → 기존 출력 유지
-        msg = f"**{character} / {set_name}**\n- 폭탄 전투력: **{score_av}점**"
-    else:
-        msg = (f"**{character} / {set_name}**\n"
-               f"- 기대 전투력: **{score_av}점**\n"
-               f"- 전투력(약점O): **{score_w}점**\n"
-               f"- 전투력(약점X): **{score_nw}점**\n"
-               f"- 전투력(막기): **{score_blk}점**")  # ✅ 추가
-    await ctx.reply(msg)
+        character, stat_s, cr_s, cd_s, wr_s, set_name = parts
+        if character not in ("태오", "콜트", "연희", "린", "세인", "파스칼"):
+            return await ctx.reply("❌ 지원 캐릭터: `태오`, `콜트`, `연희`, `린`, `세인`, `파스칼`")
+
+        try:
+            stat_atk  = float(stat_s)
+            crit_rate = parse_percent(cr_s)
+            crit_dmg  = parse_percent(cd_s)
+            weak_rate = parse_percent(wr_s)
+        except ValueError:
+            return await ctx.reply("❌ 숫자 형식 오류. 예: `5%`, `174%`, `20%`")
+
+        # compute_damage가 5개 값을 반환(막기 기대 전투력 추가)
+        atk, dmg_w, dmg_nw, dmg_exp, dmg_blk = compute_damage(
+            character, stat_atk, crit_rate, crit_dmg, weak_rate, set_name
+        )
+
+        score_w   = score_from_cap(character, dmg_w)
+        score_nw  = score_from_cap(character, dmg_nw)
+        score_av  = score_from_cap(character, dmg_exp)
+        score_blk = score_from_cap(character, dmg_blk)
+
+        if character == "콜트":
+            # 콜트는 치명/약점 미적용 모델이라 블록=기대와 동일 → 기존 출력 유지
+            msg = f"**{character} / {set_name}**\n- 폭탄 전투력: **{score_av}점**"
+        else:
+            msg = (f"**{character} / {set_name}**\n"
+                   f"- 기대 전투력: **{score_av}점**\n"
+                   f"- 전투력(약점O): **{score_w}점**\n"
+                   f"- 전투력(약점X): **{score_nw}점**\n"
+                   f"- 전투력(막기): **{score_blk}점**")
+        await ctx.reply(msg)
+    except Exception:
+        logger.error("!전투력 오류:\n" + traceback.format_exc())
+        await ctx.reply("⚠️ 전투력 계산 중 오류가 발생했어요.")
 
 # =========================
 # 신규 명령어: !방어력
