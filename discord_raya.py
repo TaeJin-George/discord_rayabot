@@ -733,7 +733,7 @@ async def cmd_power(ctx, *, argline: str):
                    f"- 기대 전투력: **{score_av}점**\n"
                    f"- 전투력(약점O): **{score_w}점**\n"
                    f"- 전투력(약점X): **{score_nw}점**\n"
-                   f"- 전투력(막기): **{score_blk}점**")
+                   f"- 전투력(상대막기O): **{score_blk}점**")
         await ctx.reply(msg)
     except Exception:
         logger.error("!전투력 오류:\n" + traceback.format_exc())
