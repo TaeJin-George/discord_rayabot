@@ -128,7 +128,10 @@ def compute_damage(character: str, stat_atk: float, crit_rate_pct: float,
                    crit_dmg_pct: float, weak_rate_pct: float, set_name: str):
     atk = final_attack(stat_atk, character)
     weak_coeff, set_dmg = normalize_set(set_name)
+
     cd_mult = max(1.0, crit_dmg_pct / 100.0)
+
+    # 치명 확률
     if is_never_crit_and_weak(character):
         crit_factor = 1.0
     elif is_always_crit(character):
@@ -141,6 +144,7 @@ def compute_damage(character: str, stat_atk: float, crit_rate_pct: float,
             pcrit = min(1.0, pcrit + 0.51)
         crit_factor = pcrit * cd_mult + (1 - pcrit) * 1.0
 
+    # 약점 확률
     if is_never_crit_and_weak(character):
         pweak = 0.0
     else:
@@ -150,10 +154,17 @@ def compute_damage(character: str, stat_atk: float, crit_rate_pct: float,
         if character == "파스칼":
             pweak = min(1.0, pweak + 0.66)
 
-    dmg_on_weak = atk * crit_factor * weak_coeff * set_dmg
-    dmg_no_weak = atk * crit_factor * 1.0        * set_dmg
-    dmg_expected = atk * crit_factor * (pweak * weak_coeff + (1 - pweak) * 1.0) * set_dmg
-    return atk, dmg_on_weak, dmg_no_weak, dmg_expected
+    # 기존 세 가지
+    dmg_on_weak   = atk * crit_factor * weak_coeff * set_dmg
+    dmg_no_weak   = atk * crit_factor * 1.0        * set_dmg
+    dmg_expected  = atk * crit_factor * (pweak * weak_coeff + (1 - pweak) * 1.0) * set_dmg
+
+    # ✅ 새로 추가: 막기(치명 무효) 기대 전투력
+    crit_factor_block = 1.0  # BLOCK_CRIT_MULT
+    dmg_block_expect  = atk * crit_factor_block * (pweak * weak_coeff + (1 - pweak) * 1.0) * set_dmg
+
+    return atk, dmg_on_weak, dmg_no_weak, dmg_expected, dmg_block_expect
+
 
 def score_from_cap(character: str, value: float) -> float:
     cap = SCORE_CAP.get(character)
@@ -687,35 +698,25 @@ async def manual_cmd(ctx: commands.Context):
 
 @bot.command(name="전투력")
 async def cmd_power(ctx, *, argline: str):
-    try:
-        parts = [p.strip() for p in argline.split('/')]
-        if len(parts) != 6:
-            return await ctx.reply("❌ 형식: `!전투력 캐릭/스탯공/치확/치피/약확/세트`")
-        character, stat_s, cr_s, cd_s, wr_s, set_name = parts
-        if character not in ("태오","콜트","연희","린","세인","파스칼"):
-            return await ctx.reply("❌ 지원 캐릭터: `태오`, `콜트`, `연희`, `린`, `세인`, `파스칼`")
-        try:
-            stat_atk  = float(stat_s)
-            crit_rate = parse_percent(cr_s)
-            crit_dmg  = parse_percent(cd_s)
-            weak_rate = parse_percent(wr_s)
-        except ValueError:
-            return await ctx.reply("❌ 숫자 형식 오류. 예: `5%`, `174%`, `20%`")
-        atk, dmg_w, dmg_nw, dmg_exp = compute_damage(character, stat_atk, crit_rate, crit_dmg, weak_rate, set_name)
-        score_w  = score_from_cap(character, dmg_w)
-        score_nw = score_from_cap(character, dmg_nw)
-        score_av = score_from_cap(character, dmg_exp)
-        if character == "콜트":
-            msg = f"**{character} / {set_name}**\n- 폭탄 전투력: **{score_av}점**"
-        else:
-            msg = (f"**{character} / {set_name}**\n"
-                   f"- 기대 전투력: **{score_av}점**\n"
-                   f"- 전투력(약점O): **{score_w}점**\n"
-                   f"- 전투력(약점X): **{score_nw}점**")
-        await ctx.reply(msg)
-    except Exception:
-        logger.error("!전투력 오류:\n" + traceback.format_exc())
-        await ctx.reply("⚠️ 전투력 계산 중 오류가 발생했어요.")
+    ...
+    atk, dmg_w, dmg_nw, dmg_exp, dmg_blk = compute_damage(
+        character, stat_atk, crit_rate, crit_dmg, weak_rate, set_name
+    )
+    score_w   = score_from_cap(character, dmg_w)
+    score_nw  = score_from_cap(character, dmg_nw)
+    score_av  = score_from_cap(character, dmg_exp)
+    score_blk = score_from_cap(character, dmg_blk)
+
+    if character == "콜트":
+        # 콜트는 원래 치명/약점이 비활성이라 블록 값=기대값 → 기존 출력 유지
+        msg = f"**{character} / {set_name}**\n- 폭탄 전투력: **{score_av}점**"
+    else:
+        msg = (f"**{character} / {set_name}**\n"
+               f"- 기대 전투력: **{score_av}점**\n"
+               f"- 전투력(약점O): **{score_w}점**\n"
+               f"- 전투력(약점X): **{score_nw}점**\n"
+               f"- 전투력(막기): **{score_blk}점**")  # ✅ 추가
+    await ctx.reply(msg)
 
 # =========================
 # 신규 명령어: !방어력
