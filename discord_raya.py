@@ -1,4 +1,4 @@
-
+# discord_counter_bot.py
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import logging
 import traceback
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Sequence
 from urllib.parse import urlencode
 import math
 
@@ -106,7 +106,7 @@ def is_never_crit_and_weak(character: str) -> bool:
     return character == "콜트"
 
 def parse_percent(x: str) -> float:
-    return float(x.replace('%', '').strip())
+    return float(str(x).replace('%', '').strip())
 
 def normalize_set(name: str):
     name = name.strip()
@@ -386,15 +386,13 @@ def team_exact(maybe3: List[Any]) -> List[str]:
 def skills_order_exact(maybe3: List[Any]) -> List[str]:
     return [s_no_strip(x) for x in maybe3 if s_no_strip(x) != ""]
 
-from typing import Sequence, Tuple, Optional
-
 def _canon_team_key(names: Sequence[Optional[str]]) -> Tuple[str, ...]:
     """공격덱: 순서 무시 비교용 키(정렬된 튜플, 공백 정리)"""
     clean = []
     for n in names:
-        s = _s(n)  # 공백 정리
-        if s:
-            clean.append(s)
+        ss = _s(n)  # 공백 정리
+        if ss:
+            clean.append(ss)
     return tuple(sorted(clean))  # 순서 무관
 
 def _canon_skill_seq(skills: Sequence[Optional[str]]) -> Tuple[str, ...]:
@@ -426,7 +424,8 @@ REQUIRED_COLUMNS = [
     "선공",
     "공격덱1","공격덱2","공격덱3",
     "스킬1.1","스킬2.1","스킬3.1",
-    "비고",  # ✅ 추가
+    "비고",
+    "추천여부",  # ✅ 추가
 ]
 
 _GS_PREFIX = "https://docs.google.com/spreadsheets/d/"
@@ -543,13 +542,16 @@ class DataStore:
                 if dedup_key in seen:
                     continue
                 seen.add(dedup_key)
+
+                # ✅ 추천여부 플래그
+                rec_flag = (_s(row.get("추천여부")).upper() == "Y")
     
                 counters = {
                     "선공": first,
                     "조합": atk_team_disp,     
                     "스킬": atk_skills_disp,
                     "비고": _s(row.get("비고")),
-   # "
+                    "추천": rec_flag,  # ✅
                 }
 
                 if any(counters["조합"]) or any(counters["스킬"]):
@@ -649,6 +651,14 @@ async def reload_cmd(ctx: commands.Context):
         logger.error("!리로드 오류:\n" + traceback.format_exc())
         await ctx.send("⚠️ 리로드 중 오류가 발생했어요.")
 
+def _format_blockquote(text: str) -> str:
+    """여러 줄 텍스트를 디스코드 블록 인용(>)으로 통일"""
+    if not text:
+        return ""
+    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    lines = text.split("\n")
+    return "\n".join([("> " + ln if ln else ">") for ln in lines])
+
 @bot.command(name="조합")
 async def combo_cmd(ctx: commands.Context, *, args: str = ""):
     try:
@@ -666,20 +676,31 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
         if not results:
             await ctx.send(f"⚠️ 조건에 맞는 데이터가 없습니다.\n{header}"); return
 
+        # ✅ 추천(Y) 우선 정렬
+        results_sorted = sorted(results, key=lambda r: (not r.get("추천", False)))
+
         chunks: List[str] = [header]
-        for i, r in enumerate(results, 1):
-            combo = ", ".join([x for x in r['조합'] if x]) or "정보 없음"
+        for i, r in enumerate(results_sorted, 1):
+            combo  = ", ".join([x for x in r['조합'] if x]) or "정보 없음"
             skills = " → ".join([x for x in r['스킬'] if x]) or "정보 없음"
-            first = r.get("선공", "정보 없음")
-            remark = _s(r.get("비고", ""))
-            if remark:
-                remark = remark.replace("\r\n", "\n").strip()  # ← 이 부분이 핵심
-                remark_line = f"- 💬 비고:\n{remark}\n"
+            first  = r.get("선공", "정보 없음")
+            remark_raw = _s(r.get("비고", ""))
+            is_rec = bool(r.get("추천"))
+
+            title = f"🌟 **[추천] 카운터 #{i}**" if is_rec else f"🛡️ **카운터 #{i}**"
+
+            # ✅ 비고/추천 포인트: 블록 인용으로 통일
+            if remark_raw:
+                remark_block = _format_blockquote(remark_raw)
+                if is_rec:
+                    remark_line = f"- 🌟 추천 포인트:\n{remark_block}\n"
+                else:
+                    remark_line = f"- 💬 비고:\n{remark_block}\n"
             else:
                 remark_line = ""
 
             chunks.append(
-                f"\n🛡️ **카운터 #{i}**\n"
+                f"\n{title}\n"
                 f"- 조합: `{combo}`\n"
                 f"- 스킬: `{skills}`\n"
                 f"- 선공 여부: `{first}`\n"
@@ -805,7 +826,7 @@ async def cmd_defense(ctx, *, argline: str):
         b_on_sok = result["buff"]["sok_block_on"]; b_off_sok = result["buff"]["sok_block_off"]
         red_on_sok = result["buff"]["sok_reduced_on_pct"]; red_off_sok = result["buff"]["sok_reduced_off_pct"]
 
-                # 보기 좋은 출력 (임베드: 문구/레이아웃 커스텀)
+        # 보기 좋은 출력 (임베드)
         embed = discord.Embed(
             title="vs 태오덱 상대 데미지 시뮬레이터",
             description=(
@@ -853,7 +874,6 @@ async def cmd_defense(ctx, *, argline: str):
             inline=False
         )
 
-        # 하단 주석
         embed.set_footer(text="파이 아래 후 태오 위 or 아래 쓸때 들어오는 데미지입니다.")
         await ctx.reply(embed=embed)
     except Exception:
@@ -881,4 +901,4 @@ if __name__ == "__main__":
         try:
             bot.run(TOKEN)
         except Exception:
-            logger.critical("디스코드 런타임 크래시:\n" + traceback.format_exc()) 
+            logger.critical("디스코드 런타임 크래시:\n" + traceback.format_exc())
