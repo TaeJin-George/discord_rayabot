@@ -693,7 +693,7 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
             if remark_raw:
                 remark_block = _format_blockquote(remark_raw)
                 if is_rec:
-                    remark_line = f"- 🌟 추천 포인트:\n{remark_block}\n"
+                    remark_line = f"- 🌟 비고:\n{remark_block}\n"
                 else:
                     remark_line = f"- 💬 비고:\n{remark_block}\n"
             else:
