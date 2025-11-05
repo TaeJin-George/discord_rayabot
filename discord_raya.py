@@ -106,7 +106,10 @@ def is_never_crit_and_weak(character: str) -> bool:
     return character == "콜트"
 
 def parse_percent(x: str) -> float:
-    return float(str(x).replace('%', '').strip())
+    xs = str(x).strip()
+    if xs.endswith('%'):
+        xs = xs[:-1]
+    return float(xs)
 
 def normalize_set(name: str):
     name = name.strip()
@@ -390,7 +393,7 @@ def _canon_team_key(names: Sequence[Optional[str]]) -> Tuple[str, ...]:
     """공격덱: 순서 무시 비교용 키(정렬된 튜플, 공백 정리)"""
     clean = []
     for n in names:
-        ss = _s(n)  # 공백 정리
+        ss = _s(n)
         if ss:
             clean.append(ss)
     return tuple(sorted(clean))  # 순서 무관
@@ -413,6 +416,34 @@ def _canon_first(v: Optional[str]) -> str:
     if t0 in ("후공", "second"):
         return "후공"
     return t or "정보 없음"
+
+def _format_blockquote(text: str) -> str:
+    """여러 줄 텍스트를 디스코드 블록 인용(>)으로 통일"""
+    if not text:
+        return ""
+    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    lines = text.split("\n")
+    return "\n".join([("> " + ln if ln else ">") for ln in lines])
+
+def _is_recommended(v: Any) -> bool:
+    """추천여부 파서: 다양한 표기 허용"""
+    t = _s(v).lower()
+    return t in {"y", "yes", "true", "1", "추천", "추천함", "추천요", "✅", "⭕"}
+
+def _merge_remark(old: str, new: str) -> str:
+    """비고 병합: 중복 줄 제거하고 합치기"""
+    a = _s(old); b = _s(new)
+    if not a: return b
+    if not b: return a
+    if a == b: return a
+    aset = [x for x in a.replace("\r\n","\n").replace("\r","\n").split("\n") if x.strip()]
+    bset = [x for x in b.replace("\r\n","\n").replace("\r","\n").split("\n") if x.strip()]
+    merged = []
+    seen = set()
+    for ln in aset + bset:
+        if ln not in seen:
+            merged.append(ln); seen.add(ln)
+    return "\n".join(merged)
 
 # -----------------------------
 # 데이터 로더
@@ -465,10 +496,21 @@ class DataStore:
                 gid = _guess_gid_from_url(self.excel_path)
                 csv_url = _csv_url_from_sheet(self.excel_path, gid)
                 logger.info(f"Loading Google Sheet CSV: {csv_url}")
-                df = pd.read_csv(csv_url)
+                df = pd.read_csv(csv_url, dtype=str, keep_default_na=False)
             else:
                 logger.info(f"Loading Excel: {self.excel_path}")
-                df = pd.read_excel(self.excel_path)
+                df = pd.read_excel(self.excel_path, dtype=str, keep_default_na=False)
+
+            # 컬럼명 앞뒤 공백 제거
+            df.columns = [str(c).strip() for c in df.columns]
+
+            # '추천 여부' 같은 변형을 '추천여부'로 통일
+            renamed = {}
+            for c in df.columns:
+                if c.replace(" ", "") == "추천여부" and c != "추천여부":
+                    renamed[c] = "추천여부"
+            if renamed:
+                df = df.rename(columns=renamed)
 
             missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
             if missing:
@@ -485,6 +527,8 @@ class DataStore:
         defense_team_input: List[str],
         defense_skills_input: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
+        # 키별로 병합(추천 승격/비고 합치기)
+        results_map: Dict[Tuple, Dict[str, Any]] = {}
         results: List[Dict[str, Any]] = []
         try:
             if self.df is None or self.df.empty:
@@ -499,8 +543,6 @@ class DataStore:
                 want_def_skills = skills_order_exact(defense_skills_input)
                 if len(want_def_skills) != 3:
                     return results
-    
-            seen: set = set()
     
             for _, row in self.df.iterrows():
                 defense_team = team_exact([
@@ -539,23 +581,32 @@ class DataStore:
                 atk_skills_key = _canon_skill_seq(atk_skills_disp)  # 순서 유지
     
                 dedup_key = (first, atk_skills_key, atk_team_key)
-                if dedup_key in seen:
-                    continue
-                seen.add(dedup_key)
 
-                # ✅ 추천여부 플래그
-                rec_flag = (_s(row.get("추천여부")).upper() == "Y")
+                # 현재 행의 추천/비고
+                rec_flag = _is_recommended(row.get("추천여부"))
+                remark   = _s(row.get("비고"))
+    
+                # 결과가 이미 있으면 병합 (추천 승격 + 비고 합치기)
+                if dedup_key in results_map:
+                    existed = results_map[dedup_key]
+                    if rec_flag and not existed.get("추천", False):
+                        existed["추천"] = True
+                    if remark:
+                        existed["비고"] = _merge_remark(existed.get("비고", ""), remark)
+                    continue
     
                 counters = {
                     "선공": first,
                     "조합": atk_team_disp,     
                     "스킬": atk_skills_disp,
-                    "비고": _s(row.get("비고")),
-                    "추천": rec_flag,  # ✅
+                    "비고": remark,
+                    "추천": rec_flag,
                 }
 
                 if any(counters["조합"]) or any(counters["스킬"]):
-                    results.append(counters)
+                    results_map[dedup_key] = counters
+
+            results = list(results_map.values())
     
         except Exception:
             logger.error("search_counters 오류:\n" + traceback.format_exc())
@@ -651,14 +702,6 @@ async def reload_cmd(ctx: commands.Context):
         logger.error("!리로드 오류:\n" + traceback.format_exc())
         await ctx.send("⚠️ 리로드 중 오류가 발생했어요.")
 
-def _format_blockquote(text: str) -> str:
-    """여러 줄 텍스트를 디스코드 블록 인용(>)으로 통일"""
-    if not text:
-        return ""
-    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
-    lines = text.split("\n")
-    return "\n".join([("> " + ln if ln else ">") for ln in lines])
-
 @bot.command(name="조합")
 async def combo_cmd(ctx: commands.Context, *, args: str = ""):
     try:
@@ -671,6 +714,8 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
         header = f"🎯 상대 조합: `{', '.join(sorted(team_exact(raw_team)))}`"
         if raw_skills:
             header += f" | 🧩 방어 스킬: `{' → '.join(skills_order_exact(raw_skills))}`"
+        else:
+            header += " | 🧩 방어 스킬: `정보 없음`"
         header += "\n"
 
         if not results:
@@ -693,7 +738,7 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
             if remark_raw:
                 remark_block = _format_blockquote(remark_raw)
                 if is_rec:
-                    remark_line = f"- 🌟 비고:\n{remark_block}\n"
+                    remark_line = f"- 🌟 추천 포인트:\n{remark_block}\n"
                 else:
                     remark_line = f"- 💬 비고:\n{remark_block}\n"
             else:
@@ -757,7 +802,6 @@ async def cmd_power(ctx, *, argline: str):
         except ValueError:
             return await ctx.reply("❌ 숫자 형식 오류. 예: `5%`, `174%`, `20%`")
 
-        # compute_damage가 5개 값을 반환(막기 기대 전투력 추가)
         atk, dmg_w, dmg_nw, dmg_exp, dmg_blk = compute_damage(
             character, stat_atk, crit_rate, crit_dmg, weak_rate, set_name
         )
@@ -768,7 +812,6 @@ async def cmd_power(ctx, *, argline: str):
         score_blk = score_from_cap(character, dmg_blk)
 
         if character == "콜트":
-            # 콜트는 치명/약점 미적용 모델이라 블록=기대와 동일 → 기존 출력 유지
             msg = f"**{character} / {set_name}**\n- 폭탄 전투력: **{score_av}점**"
         else:
             msg = (f"**{character} / {set_name}**\n"
@@ -807,7 +850,6 @@ async def cmd_defense(ctx, *, argline: str):
         if formation not in FORMATION_DEFENSE_PERCENT:
             return await ctx.reply("❌ 진형은 `보호`, `밸런스`, `기본`, `공격` 중 하나여야 합니다.")
 
-        # 시뮬레이션 (보조 버퍼 자동: 본인이 루디면 앨리스, 아니면 루디)
         result = simulate_vs_teo(
             defender_name=name,
             stat_def=stat_def,
@@ -826,7 +868,6 @@ async def cmd_defense(ctx, *, argline: str):
         b_on_sok = result["buff"]["sok_block_on"]; b_off_sok = result["buff"]["sok_block_off"]
         red_on_sok = result["buff"]["sok_reduced_on_pct"]; red_off_sok = result["buff"]["sok_reduced_off_pct"]
 
-        # 보기 좋은 출력 (임베드)
         embed = discord.Embed(
             title="vs 태오덱 상대 데미지 시뮬레이터",
             description=(
