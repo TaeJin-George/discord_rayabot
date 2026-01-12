@@ -319,7 +319,7 @@ class CounterView(discord.ui.View):
 # 디스코드 봇
 # =========================
 load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN", "")
+TOKEN = os.getenv("DISCORD_TOKEN_V3", "")
 SHEET_URL_DEFAULT = "https://docs.google.com/spreadsheets/d/PUT_YOUR_ID_HERE/edit?gid=0#gid=0"
 
 intents = discord.Intents.default()
