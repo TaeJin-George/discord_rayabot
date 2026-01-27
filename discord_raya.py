@@ -319,7 +319,7 @@ class CounterView(discord.ui.View):
 # 디스코드 봇
 # =========================
 load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN_V3", "")
+TOKEN = os.getenv("DISCORD_TOKEN", "")
 SHEET_URL_DEFAULT = "https://docs.google.com/spreadsheets/d/PUT_YOUR_ID_HERE/edit?gid=0#gid=0"
 
 intents = discord.Intents.default()
@@ -333,6 +333,20 @@ data_store.load()
 @bot.event
 async def on_ready():
     logger.info(f"✅ 로그인 완료: {bot.user} (guilds={len(bot.guilds)})")
+
+
+@bot.command(name="리로드")
+async def reload_cmd(ctx: commands.Context):
+    """구글시트 데이터를 다시 로드합니다."""
+    try:
+        data_store.load()
+        if data_store.df is None:
+            await ctx.reply("❌ 데이터 로드 실패", mention_author=False)
+        else:
+            await ctx.reply("✅ 데이터 리로드 완료", mention_author=False)
+    except Exception:
+        logger.error("!리로드 오류:\n" + traceback.format_exc())
+        await ctx.reply("⚠️ 리로드 중 오류가 발생했어요.", mention_author=False)
 
 
 @bot.command(name="조합")
@@ -378,3 +392,4 @@ if __name__ == "__main__":
         logger.error("DISCORD_TOKEN 이 설정되지 않았습니다 (.env/환경변수 확인)")
     else:
         bot.run(TOKEN)
+
