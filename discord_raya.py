@@ -288,7 +288,7 @@ def build_detail_embed(enemy_disp: str, item: Dict[str, Any]) -> discord.Embed:
         return f"- {icon} **{d['unit']}**" + (f" - {tail}" if tail else "")
 
     lines: List[str] = []
-    lines.append(f"🧩 **진형** : `{formation or '정보 없음'}`\n")
+    lines.append(f"🧩 **진형** : `{formation or '정보 없음'}`")
     lines.append(f"🏁 선공: `{item.get('first','정보 없음')}`")
 
     front_lines = [ln for k in front_order if (ln := fmt_line(k, ""))]
