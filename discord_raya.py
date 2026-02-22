@@ -253,14 +253,12 @@ def build_detail_embed(enemy_disp: str, item: Dict[str, Any]) -> discord.Embed:
     total = win + lose
     rate = item["rate"] * 100.0
     counter_combo = ", ".join([x for x in item["counter_disp"] if x]) or "정보 없음"
-    badge = " ✅ **추천**" if item.get("recommend") else ""
 
     embed = discord.Embed(
         title=f"🧩 `{enemy_disp}` 카운터 상세",
         description=(
             f"🛡️ 카운터: `{counter_combo}`{badge}\n"
-            f"📊 전적: **{win}승 {lose}패** (승률 **{rate:.1f}%**, {total}판)\n"
-            f"🏁 선공: `{item.get('first','정보 없음')}`"
+            f"📊 전적: **{win}승 {lose}패** (승률 **{rate:.1f}%**, {total}판)"
         ),
         color=0x5865F2
     )
@@ -290,7 +288,8 @@ def build_detail_embed(enemy_disp: str, item: Dict[str, Any]) -> discord.Embed:
         return f"- {icon} **{d['unit']}**" + (f" - {tail}" if tail else "")
 
     lines: List[str] = []
-    lines.append(f"🧩 **진형** : `{formation or '정보 없음'}`")
+    lines.append(f"🧩 **진형** : `{formation or '정보 없음'}`\n")
+    lines.append(f"🏁 선공: `{item.get('first','정보 없음')}`")
 
     front_lines = [ln for k in front_order if (ln := fmt_line(k, ""))]
     back_lines  = [ln for k in back_order  if (ln := fmt_line(k, ""))]
