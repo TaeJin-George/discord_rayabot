@@ -6,6 +6,11 @@
 - 조합 결과: reply 형태
 - 카운터 목록 Select(드롭다운)로 상세 임베드 표시
 - '기본 세팅' 필드 제거, '세팅'만 사용
+
+[추가]
+- disable, recommend 컬럼 지원 (입력: "Y" 또는 Null)
+  - disable=Y : 목록에서 제외(논리 삭제)
+  - recommend=Y : 승률/판수와 무관하게 목록 상단 "추천"으로 표시
 """
 
 from __future__ import annotations
@@ -62,6 +67,9 @@ REQUIRED_COLUMNS = [
     "skill1", "skill2", "skill3",
     "pet",
     "notes",
+    # 신규 컬럼 (없어도 load()에서 자동 생성)
+    "disable",
+    "recommend",
 ]
 
 POS_COLS = [
@@ -80,6 +88,11 @@ def _s(val: Any) -> str:
     if pd.isna(val):
         return ""
     return str(val).strip()
+
+
+def _is_yes(val: Any) -> bool:
+    # 입력이 Y 또는 y 여도 인정, 공백/None 안전
+    return _s(val).upper() == "Y"
 
 
 def _safe_int(x: Any) -> int:
@@ -151,8 +164,17 @@ class DataStore:
             gid = _guess_gid_from_url(self.sheet_url)
             csv_url = _csv_url_from_sheet(self.sheet_url, gid)
             logger.info(f"Loading Google Sheet CSV: {csv_url}")
+
             df = pd.read_csv(csv_url, dtype=str, keep_default_na=False)
             df.columns = [str(c).strip() for c in df.columns]
+
+            # 누락 컬럼 자동 생성 (기존 시트 호환)
+            missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+            if missing:
+                logger.warning(f"시트에 누락된 컬럼이 있어 자동 생성합니다: {missing}")
+                for c in missing:
+                    df[c] = ""
+
             self.df = df
             logger.info(f"Loaded data: shape={df.shape}")
         except Exception:
@@ -169,6 +191,10 @@ class DataStore:
             return results
 
         for _, row in self.df.iterrows():
+            # disable=Y 인 행은 논리 삭제 처리
+            if _is_yes(row.get("disable")):
+                continue
+
             enemy_key = _canon_team_key([row.get("enemy1"), row.get("enemy2"), row.get("enemy3")])
             if enemy_key != want:
                 continue
@@ -179,6 +205,9 @@ class DataStore:
 
             win = _safe_int(row.get("win"))
             lose = _safe_int(row.get("lose"))
+            total = win + lose
+
+            is_recommend = _is_yes(row.get("recommend"))
 
             item = {
                 "id": _s(row.get("id")),
@@ -187,12 +216,14 @@ class DataStore:
                 "first": _s(row.get("first")) or "정보 없음",
                 "win": win,
                 "lose": lose,
+                "total": total,
                 "rate": _winrate(win, lose),
                 "formation": _s(row.get("formation")),
                 "pet": _s(row.get("pet")),
                 "notes": _s(row.get("notes")),
                 "skill_texts": [_s(row.get("skill1")), _s(row.get("skill2")), _s(row.get("skill3"))],
                 "positions": [],
+                "recommend": is_recommend,
             }
 
             for p, s_col, o_col, r_col in POS_COLS:
@@ -206,7 +237,11 @@ class DataStore:
 
             results.append(item)
 
-        results.sort(key=lambda x: (x["rate"], x["win"] + x["lose"]), reverse=True)
+        # 정렬 우선순위:
+        # 1) recommend=Y 최상단
+        # 2) 승률
+        # 3) 판수(승+패)
+        results.sort(key=lambda x: (1 if x.get("recommend") else 0, x["rate"], x["total"]), reverse=True)
         return results
 
 
@@ -218,12 +253,12 @@ def build_detail_embed(enemy_disp: str, item: Dict[str, Any]) -> discord.Embed:
     total = win + lose
     rate = item["rate"] * 100.0
     counter_combo = ", ".join([x for x in item["counter_disp"] if x]) or "정보 없음"
+    badge = " ✅ **추천**" if item.get("recommend") else ""
 
     embed = discord.Embed(
-        title="🧩 카운터 상세",
+        title=f"🧩 `{enemy_disp}` 카운터 상세",
         description=(
-            f"🎯 상대: `{enemy_disp}`\n"
-            f"🛡️ 카운터: `{counter_combo}`\n"
+            f"🛡️ 카운터: `{counter_combo}`{badge}\n"
             f"📊 전적: **{win}승 {lose}패** (승률 **{rate:.1f}%**, {total}판)\n"
             f"🏁 선공: `{item.get('first','정보 없음')}`"
         ),
@@ -257,8 +292,8 @@ def build_detail_embed(enemy_disp: str, item: Dict[str, Any]) -> discord.Embed:
     lines: List[str] = []
     lines.append(f"🧩 **진형** : `{formation or '정보 없음'}`")
 
-    front_lines = [ln for k in front_order if (ln := fmt_line(k, '🛡️'))]
-    back_lines  = [ln for k in back_order  if (ln := fmt_line(k, '⚔️'))]
+    front_lines = [ln for k in front_order if (ln := fmt_line(k, ""))]
+    back_lines  = [ln for k in back_order  if (ln := fmt_line(k, ""))]
 
     if front_lines:
         lines.append("\n🛡️ **전열**")
@@ -268,7 +303,7 @@ def build_detail_embed(enemy_disp: str, item: Dict[str, Any]) -> discord.Embed:
         lines.extend(back_lines)
     if pet:
         lines.append("\n🐾 **펫**")
-        lines.append(f"- 🐶 `{pet}`")
+        lines.append(f"- `{pet}`")
 
     embed.add_field(name="⚙️ 세팅", value="\n".join(lines)[:1024], inline=False)
 
@@ -292,15 +327,26 @@ class CounterSelect(discord.ui.Select):
     def __init__(self, enemy_disp: str, results: List[Dict[str, Any]]):
         self.enemy_disp = enemy_disp
         self.results = results
-        options = []
+
+        options: List[discord.SelectOption] = []
         for i, item in enumerate(results[:25]):
             win, lose = item["win"], item["lose"]
             total = win + lose
             rate = item["rate"] * 100.0
-            star = "⭐ " if i < 3 else ""
-            label = f"{star}{i+1}. {','.join([x for x in item['counter_disp'] if x])}"
-            desc = f"{rate:.0f}% · {total}판"
-            options.append(discord.SelectOption(label=label[:100], description=desc[:100], value=str(i)))
+
+            rec = "추천 · " if item.get("recommend") else ""
+            combo = ", ".join([x for x in item["counter_disp"] if x]) or "정보 없음"
+
+            # label: 너무 길어지면 잘리므로 심플하게
+            label = f"{i+1}. {combo}"
+            desc = f"{rec}{rate:.0f}% · {total}판"
+
+            options.append(discord.SelectOption(
+                label=label[:100],
+                description=desc[:100],
+                value=str(i),
+            ))
+
         super().__init__(placeholder="보고 싶은 카운터를 선택하세요", options=options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -357,24 +403,30 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
             await ctx.reply("❌ 입력은 상대 3명만. 예) `!조합 제이브, 카구라, 트루드`", mention_author=False)
             return
 
-        results = data_store.search_by_enemy(tokens)
-        enemy_disp = ", ".join(sorted(tokens))
+        # 표시/검색 키 통일 (공백/정렬 혼선 방지)
+        want = _canon_team_key(tokens)
+        enemy_disp = ", ".join(want)
+
+        results = data_store.search_by_enemy(list(want))
 
         if not results:
-            await ctx.reply(f"⚠️ 조건에 맞는 카운터 데이터가 없습니다.\n🎯 상대 조합: `{enemy_disp}`",
-                            mention_author=False)
+            await ctx.reply(
+                f"⚠️ 조건에 맞는 카운터 데이터가 없습니다.\n🎯 상대 조합: `{enemy_disp}`",
+                mention_author=False
+            )
             return
 
-        lines = []
+        lines: List[str] = []
         for i, item in enumerate(results[:10], 1):
             rate = item["rate"] * 100.0
             total = item["win"] + item["lose"]
-            star = "⭐ " if i <= 3 else ""
-            combo = ", ".join([x for x in item["counter_disp"] if x])
-            lines.append(f"{star}{i}. `{combo}` — **{rate:.0f}%** ({total}판)")
+            combo = ", ".join([x for x in item["counter_disp"] if x]) or "정보 없음"
+
+            badge = "🟩 **추천** " if item.get("recommend") else ""
+            lines.append(f"{badge}{i}. `{combo}` — **{rate:.0f}%** ({total}판)")
 
         embed = discord.Embed(
-            title="📋 카운터 목록 (승률순)",
+            title="📋 카운터 목록 (추천 우선/승률순)",
             description=f"🎯 상대 조합: `{enemy_disp}`\n\n" + "\n".join(lines),
             color=0xF1C40F
         )
@@ -392,4 +444,3 @@ if __name__ == "__main__":
         logger.error("DISCORD_TOKEN 이 설정되지 않았습니다 (.env/환경변수 확인)")
     else:
         bot.run(TOKEN)
-
