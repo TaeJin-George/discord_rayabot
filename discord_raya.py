@@ -257,7 +257,7 @@ def build_detail_embed(enemy_disp: str, item: Dict[str, Any]) -> discord.Embed:
     embed = discord.Embed(
         title=f"🧩 `{enemy_disp}` 카운터 상세",
         description=(
-            f"🛡️ 카운터: `{counter_combo}`{badge}\n"
+            f"🛡️ 카운터: `{counter_combo}`\n"
             f"📊 전적: **{win}승 {lose}패** (승률 **{rate:.1f}%**, {total}판)"
         ),
         color=0x5865F2
@@ -421,7 +421,7 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
             total = item["win"] + item["lose"]
             combo = ", ".join([x for x in item["counter_disp"] if x]) or "정보 없음"
 
-            badge = "🟩 **추천** " if item.get("recommend") else ""
+            badge = "⭐ **추천** " if item.get("recommend") else ""
             lines.append(f"{badge}{i}. `{combo}` — **{rate:.0f}%** ({total}판)")
 
         embed = discord.Embed(
