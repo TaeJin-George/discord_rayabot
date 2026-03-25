@@ -91,7 +91,7 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
             total = item["win"] + item["lose"]
             combo = ", ".join([x for x in item["counter_disp"] if x]) or "정보 없음"
 
-            star = _badge_for_item(item, i)
+            star = _badge_for_item(item)
             rec_text = "**추천** · " if item.get("recommend") else ""
             lines.append(f"{star}{i}. `{combo}` — {rec_text}**{rate:.0f}%** ({total}판)")
 
