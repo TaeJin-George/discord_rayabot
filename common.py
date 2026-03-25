@@ -59,7 +59,7 @@ def _format_blockquote(text: str) -> str:
     return "\n".join(["> " + ln if ln else ">" for ln in text.split("\n")])
 
 
-def _badge_for_item(item: dict) -> str:
+def _badge_for_item(item: dict, i: int) -> str:
     if item.get("recommend"):
         return "⭐ "
     return ""
