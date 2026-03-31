@@ -108,20 +108,20 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
         logger.error("!조합 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 요청 처리 중 오류가 발생했어요.", mention_author=False)
 
-@bot.command(name="승률")
-async def winrate_cmd(ctx: commands.Context, *, args: str = ""):
+@bot.command(name="우리승률")
+async def my_winrate_cmd(ctx: commands.Context, *, args: str = ""):
     try:
         tokens = _split_csv_args(args)
         if len(tokens) != 3:
-            await ctx.reply("❌ 입력은 공격조합 3명. 예) `!승률 트루드, 겔리두스, 라드그리드`", mention_author=False)
+            await ctx.reply("❌ 입력은 공격조합 3명. 예) `!우리승률 트루드, 겔리두스, 라드그리드`", mention_author=False)
             return
 
         target_disp = _join_team_disp(tokens)
-        results = raw_store.get_attack_winrates(tokens)
+        results = raw_store.get_my_attack_winrates(tokens)
 
         if not results:
             await ctx.reply(
-                f"⚠️ 조건에 맞는 승률 데이터가 없습니다.\n🎯 공격 조합: `{target_disp}`\n📌 전체 raw data / {MIN_STAT_TRIES}판 이상",
+                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 우리 길드 기준 / {MIN_STAT_TRIES}판 이상",
                 mention_author=False
             )
             return
@@ -135,18 +135,58 @@ async def winrate_cmd(ctx: commands.Context, *, args: str = ""):
             )
 
         embed = build_stats_embed(
-            title="⚔️ 공격 승률",
+            title="🟢 우리 공격 승률",
             target_disp=target_disp,
             lines=lines,
-            subtitle=f"전체 raw data · 방어조합별 승률 · {MIN_STAT_TRIES}판 이상",
-            color=0x1ABC9C,
+            subtitle=f"기준=공격 · 우리 길드 실전 기록 · {MIN_STAT_TRIES}판 이상",
+            color=0x2ECC71,
         )
 
         await ctx.reply(embed=embed, mention_author=False)
 
     except Exception:
-        logger.error("!승률 오류:\n" + traceback.format_exc())
-        await ctx.reply("⚠️ 승률 조회 중 오류가 발생했어요.", mention_author=False)
+        logger.error("!우리승률 오류:\n" + traceback.format_exc())
+        await ctx.reply("⚠️ 오류 발생", mention_author=False)
+
+@bot.command(name="전체승률")
+async def global_winrate_cmd(ctx: commands.Context, *, args: str = ""):
+    try:
+        tokens = _split_csv_args(args)
+        if len(tokens) != 3:
+            await ctx.reply("❌ 입력은 공격조합 3명. 예) `!전체승률 트루드, 겔리두스, 라드그리드`", mention_author=False)
+            return
+
+        target_disp = _join_team_disp(tokens)
+        results = raw_store.get_global_attack_winrates(tokens)
+
+        if not results:
+            await ctx.reply(
+                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 전체 raw data / {MIN_STAT_TRIES}판 이상",
+                mention_author=False
+            )
+            return
+
+        lines = []
+        for i, item in enumerate(results[:10], 1):
+            rate = item["rate"] * 100.0
+            lines.append(
+                f"{i}. `{item['defense_disp']}` — **{item['success']}승 {item['fail']}패** "
+                f"(**{rate:.0f}%**, {item['total']}판)"
+            )
+
+        embed = build_stats_embed(
+            title="🔵 전체 공격 승률",
+            target_disp=target_disp,
+            lines=lines,
+            subtitle=f"전체 raw data 기준 · {MIN_STAT_TRIES}판 이상",
+            color=0x3498DB,
+        )
+
+        await ctx.reply(embed=embed, mention_author=False)
+
+    except Exception:
+        logger.error("!전체승률 오류:\n" + traceback.format_exc())
+        await ctx.reply("⚠️ 오류 발생", mention_author=False)
 
 
 @bot.command(name="방어통계")
