@@ -148,6 +148,46 @@ async def my_winrate_cmd(ctx: commands.Context, *, args: str = ""):
         logger.error("!우리공격 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 오류 발생", mention_author=False)
 
+@bot.command(name="상대공격")
+async def enemy_attack_winrate_cmd(ctx: commands.Context, *, args: str = ""):
+    try:
+        tokens = _split_csv_args(args)
+        if len(tokens) != 3:
+            await ctx.reply("❌ 입력은 공격조합 3명. 예) `!상대공격 트루드, 겔리두스, 라드그리드`", mention_author=False)
+            return
+
+        target_disp = _join_team_disp(tokens)
+        results = raw_store.get_enemy_attack_winrates(tokens)
+
+        if not results:
+            await ctx.reply(
+                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 상대 기준(기준=방어) / {MIN_STAT_TRIES}판 이상",
+                mention_author=False
+            )
+            return
+
+        lines = []
+        for i, item in enumerate(results[:10], 1):
+            rate = item["rate"] * 100.0
+            lines.append(
+                f"{i}. `{item['defense_disp']}` — **{item['success']}승 {item['fail']}패** "
+                f"(**{rate:.0f}%**, {item['total']}판)"
+            )
+
+        embed = build_stats_embed(
+            title="🔴 상대 공격 승률",
+            target_disp=target_disp,
+            lines=lines,
+            subtitle=f"기준=방어 · 상대가 사용한 공격조합 성적 · {MIN_STAT_TRIES}판 이상",
+            color=0xE74C3C,
+        )
+
+        await ctx.reply(embed=embed, mention_author=False)
+
+    except Exception:
+        logger.error("!상대공격 오류:\n" + traceback.format_exc())
+        await ctx.reply("⚠️ 오류 발생", mention_author=False)
+
 @bot.command(name="공격")
 async def global_winrate_cmd(ctx: commands.Context, *, args: str = ""):
     try:
