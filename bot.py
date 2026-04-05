@@ -108,12 +108,12 @@ async def combo_cmd(ctx: commands.Context, *, args: str = ""):
         logger.error("!조합 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 요청 처리 중 오류가 발생했어요.", mention_author=False)
 
-@bot.command(name="우리승률")
+@bot.command(name="우리공격")
 async def my_winrate_cmd(ctx: commands.Context, *, args: str = ""):
     try:
         tokens = _split_csv_args(args)
         if len(tokens) != 3:
-            await ctx.reply("❌ 입력은 공격조합 3명. 예) `!우리승률 트루드, 겔리두스, 라드그리드`", mention_author=False)
+            await ctx.reply("❌ 입력은 공격조합 3명. 예) `!우리공격 트루드, 겔리두스, 라드그리드`", mention_author=False)
             return
 
         target_disp = _join_team_disp(tokens)
@@ -145,15 +145,15 @@ async def my_winrate_cmd(ctx: commands.Context, *, args: str = ""):
         await ctx.reply(embed=embed, mention_author=False)
 
     except Exception:
-        logger.error("!우리승률 오류:\n" + traceback.format_exc())
+        logger.error("!우리공격 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 오류 발생", mention_author=False)
 
-@bot.command(name="전체승률")
+@bot.command(name="공격")
 async def global_winrate_cmd(ctx: commands.Context, *, args: str = ""):
     try:
         tokens = _split_csv_args(args)
         if len(tokens) != 3:
-            await ctx.reply("❌ 입력은 공격조합 3명. 예) `!전체승률 트루드, 겔리두스, 라드그리드`", mention_author=False)
+            await ctx.reply("❌ 입력은 공격조합 3명. 예) `!공격 트루드, 겔리두스, 라드그리드`", mention_author=False)
             return
 
         target_disp = _join_team_disp(tokens)
@@ -185,16 +185,16 @@ async def global_winrate_cmd(ctx: commands.Context, *, args: str = ""):
         await ctx.reply(embed=embed, mention_author=False)
 
     except Exception:
-        logger.error("!전체승률 오류:\n" + traceback.format_exc())
+        logger.error("!공격 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 오류 발생", mention_author=False)
 
 
-@bot.command(name="방어통계")
+@bot.command(name="우리방어")
 async def defense_stats_cmd(ctx: commands.Context, *, args: str = ""):
     try:
         tokens = _split_csv_args(args)
         if len(tokens) != 3:
-            await ctx.reply("❌ 입력은 방어조합 3명. 예) `!방어통계 브브, 여포, 파이`", mention_author=False)
+            await ctx.reply("❌ 입력은 방어조합 3명. 예) `!우리방어 브브, 여포, 파이`", mention_author=False)
             return
 
         target_disp = _join_team_disp(tokens)
@@ -225,16 +225,16 @@ async def defense_stats_cmd(ctx: commands.Context, *, args: str = ""):
         await ctx.reply(embed=embed, mention_author=False)
 
     except Exception:
-        logger.error("!방어통계 오류:\n" + traceback.format_exc())
+        logger.error("!우리방어 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 방어 통계 처리 중 오류가 발생했어요.", mention_author=False)
 
 
-@bot.command(name="공격통계")
+@bot.command(name="상대방어")
 async def attack_stats_cmd(ctx: commands.Context, *, args: str = ""):
     try:
         tokens = _split_csv_args(args)
         if len(tokens) != 3:
-            await ctx.reply("❌ 입력은 상대 방어조합 3명. 예) `!공격통계 브브, 여포, 파이`", mention_author=False)
+            await ctx.reply("❌ 입력은 상대 방어조합 3명. 예) `!상대방어 브브, 여포, 파이`", mention_author=False)
             return
 
         target_disp = _join_team_disp(tokens)
@@ -256,7 +256,7 @@ async def attack_stats_cmd(ctx: commands.Context, *, args: str = ""):
             )
 
         embed = build_stats_embed(
-            title="⚔️ 공격 통계",
+            title="⚔️ 상대 방어 통계",
             target_disp=target_disp,
             lines=lines,
             subtitle=f"기준=공격 · 우리 공격조합별 돌파율 · {MIN_STAT_TRIES}판 이상",
@@ -265,16 +265,16 @@ async def attack_stats_cmd(ctx: commands.Context, *, args: str = ""):
         await ctx.reply(embed=embed, mention_author=False)
 
     except Exception:
-        logger.error("!공격통계 오류:\n" + traceback.format_exc())
+        logger.error("!상대방어 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 공격 통계 처리 중 오류가 발생했어요.", mention_author=False)
 
 
-@bot.command(name="통계")
+@bot.command(name="방어")
 async def overall_stats_cmd(ctx: commands.Context, *, args: str = ""):
     try:
         tokens = _split_csv_args(args)
         if len(tokens) != 3:
-            await ctx.reply("❌ 입력은 대상 방어조합 3명. 예) `!통계 브브, 여포, 파이`", mention_author=False)
+            await ctx.reply("❌ 입력은 대상 방어조합 3명. 예) `!방어 브브, 여포, 파이`", mention_author=False)
             return
 
         target_disp = _join_team_disp(tokens)
@@ -296,7 +296,7 @@ async def overall_stats_cmd(ctx: commands.Context, *, args: str = ""):
             )
 
         embed = build_stats_embed(
-            title="📊 전체 통계",
+            title="📊 전체 방어",
             target_disp=target_disp,
             lines=lines,
             subtitle=f"전체 raw data · 공격조합별 종합 돌파율 · {MIN_STAT_TRIES}판 이상",
@@ -305,7 +305,7 @@ async def overall_stats_cmd(ctx: commands.Context, *, args: str = ""):
         await ctx.reply(embed=embed, mention_author=False)
 
     except Exception:
-        logger.error("!통계 오류:\n" + traceback.format_exc())
+        logger.error("!방어 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 전체 통계 처리 중 오류가 발생했어요.", mention_author=False)
 
 
