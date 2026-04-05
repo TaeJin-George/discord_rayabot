@@ -185,6 +185,53 @@ class RawMatchStore:
         results.sort(key=lambda x: (x["total"], x["rate"], x["success"]), reverse=True)
         return results
 
+    def get_enemy_attack_winrates(self, attack_team_input: List[str]) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        if self.df is None or self.df.empty:
+            return results
+    
+        want_key = _join_team_key(attack_team_input)
+        if len(_canon_team_key(attack_team_input)) != 3:
+            return results
+    
+        bucket: Dict[str, Dict[str, Any]] = {}
+    
+        for _, row in self.df.iterrows():
+            if _s(row.get("기준")) != "방어":
+                continue
+    
+            if self._attack_key_from_row(row) != want_key:
+                continue
+    
+            def_key = self._defense_key_from_row(row)
+            def_disp = self._defense_disp_from_row(row)
+    
+            if def_key not in bucket:
+                bucket[def_key] = {
+                    "defense_key": def_key,
+                    "defense_disp": def_disp,
+                    "success": 0,
+                    "fail": 0,
+                    "total": 0,
+                    "rate": 0.0,
+                }
+    
+            bucket[def_key]["total"] += 1
+    
+            if _result_is_attack_win(row.get("승패여부")):
+                bucket[def_key]["success"] += 1
+            elif _result_is_attack_lose(row.get("승패여부")):
+                bucket[def_key]["fail"] += 1
+    
+        for item in bucket.values():
+            if item["total"] < MIN_STAT_TRIES:
+                continue
+            item["rate"] = item["success"] / item["total"]
+            results.append(item)
+    
+        results.sort(key=lambda x: (x["total"], x["rate"], x["success"]), reverse=True)
+        return results
+
     def get_global_attack_winrates(self, attack_team_input: List[str]) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
         if self.df is None or self.df.empty:
