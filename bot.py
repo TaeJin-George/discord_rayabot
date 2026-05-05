@@ -14,6 +14,7 @@ from common import MIN_STAT_TRIES, _canon_team_key, _join_team_disp, _split_csv_
 from counter_store import DataStore
 from counter_ui import CounterView, build_stats_embed
 from raw_store import RawMatchStore
+from notifier import NotifierManager
 
 
 logging.basicConfig(
