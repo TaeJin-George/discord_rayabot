@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import aiohttp
 import discord
 import feedparser
 from discord.ext import tasks
@@ -35,54 +33,8 @@ def save_json(path: Path, data: Any) -> None:
     )
 
 
-async def resolve_youtube_channel_id(handle_url: str) -> Optional[str]:
-    """
-    https://www.youtube.com/@sena_rebirth 같은 핸들 URL에서 UC... 채널 ID를 추출.
-    """
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(handle_url, timeout=15) as resp:
-            html = await resp.text()
-
-    patterns = [
-        r'<meta itemprop="channelId" content="([^"]+)"',
-        r'"channelId":"(UC[^"]+)"',
-        r'https://www\.youtube\.com/channel/(UC[^"?/]+)',
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, html)
-        if match:
-            value = match.group(1)
-            return value if value.startswith("UC") else f"UC{value}"
-
-    return None
-
-
-async def get_youtube_feed_url(source: Dict[str, Any]) -> Optional[str]:
-    if source.get("feed_url"):
-        return source["feed_url"]
-
-    if source.get("channel_id"):
-        return f"https://www.youtube.com/feeds/videos.xml?channel_id={source['channel_id']}"
-
-    handle_url = source.get("handle_url")
-    if not handle_url:
-        return None
-
-    channel_id = await resolve_youtube_channel_id(handle_url)
-    if not channel_id:
-        return None
-
-    source["channel_id"] = channel_id
-    return f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-
-
 async def fetch_latest_youtube_video(source: Dict[str, Any]) -> Optional[Dict[str, str]]:
-    feed_url = await get_youtube_feed_url(source)
+    feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
     logger.info("[YOUTUBE] feed_url=%s", feed_url)
 
