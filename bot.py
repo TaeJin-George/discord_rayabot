@@ -43,7 +43,14 @@ raw_store.load()
 
 @bot.event
 async def on_ready():
+    global notifier_manager
+
+    if notifier_manager is None:
+        notifier_manager = NotifierManager(bot)
+        await notifier_manager.start()
+    
     logger.info(f"✅ 로그인 완료: {bot.user} (guilds={len(bot.guilds)})")
+    
 
 
 @bot.command(name="리로드")
