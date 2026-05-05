@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 import pandas as pd
 
 
-MIN_STAT_TRIES = 3
+MIN_STAT_TRIES = 1
 _GS_PREFIX = "https://docs.google.com/spreadsheets/d/"
 
 
