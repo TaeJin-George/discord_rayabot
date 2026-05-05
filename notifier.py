@@ -83,16 +83,34 @@ async def get_youtube_feed_url(source: Dict[str, Any]) -> Optional[str]:
 
 async def fetch_latest_youtube_video(source: Dict[str, Any]) -> Optional[Dict[str, str]]:
     feed_url = await get_youtube_feed_url(source)
+
+    logger.info("[YOUTUBE] feed_url=%s", feed_url)
+
     if not feed_url:
-        logger.warning("유튜브 feed_url 생성 실패: %s", source.get("id"))
+        logger.warning("[YOUTUBE] feed_url 생성 실패: %s", source.get("id"))
         return None
 
     parsed = feedparser.parse(feed_url)
 
+    logger.info(
+        "[YOUTUBE] feed 파싱 결과: entries=%s, bozo=%s",
+        len(parsed.entries),
+        getattr(parsed, "bozo", None),
+    )
+
+    if getattr(parsed, "bozo", False):
+        logger.warning("[YOUTUBE] feed 파싱 오류: %s", getattr(parsed, "bozo_exception", None))
+
     if not parsed.entries:
+        logger.warning("[YOUTUBE] feed entries 비어있음")
         return None
 
     entry = parsed.entries[0]
+
+    logger.info(
+        "[YOUTUBE] 첫 번째 entry keys=%s",
+        list(entry.keys())
+    )
 
     return {
         "id": entry.get("yt_videoid") or entry.get("id", ""),
@@ -146,48 +164,81 @@ class NotifierManager:
 
     async def check_youtube(self, source: Dict[str, Any]) -> None:
         source_id = source["id"]
+    
+        logger.info("[YOUTUBE] 체크 시작: %s", source_id)
+    
         latest = await fetch_latest_youtube_video(source)
-
-        if not latest or not latest["id"]:
+    
+        if not latest:
+            logger.warning("[YOUTUBE] 최신 영상 없음 또는 피드 파싱 실패: %s", source_id)
             return
-
+    
+        logger.info(
+            "[YOUTUBE] 최신 영상 감지: source=%s, id=%s, title=%s, url=%s, published=%s",
+            source_id,
+            latest.get("id"),
+            latest.get("title"),
+            latest.get("url"),
+            latest.get("published"),
+        )
+    
+        if not latest["id"]:
+            logger.warning("[YOUTUBE] 영상 ID 없음: %s / %s", source_id, latest)
+            return
+    
         last_seen_id = self.state.get(source_id, {}).get("last_seen_id")
-
+    
+        logger.info(
+            "[YOUTUBE] 비교: source=%s, last_seen_id=%s, latest_id=%s",
+            source_id,
+            last_seen_id,
+            latest["id"],
+        )
+    
         # 첫 실행 때는 알림 폭탄 방지: 저장만 하고 보내지 않음
         if not last_seen_id:
             self.state[source_id] = {
                 "last_seen_id": latest["id"],
                 "last_seen_title": latest["title"],
             }
-            logger.info("초기 유튜브 영상 저장: %s / %s", source_id, latest["title"])
+            save_json(STATE_PATH, self.state)
+    
+            logger.info("[YOUTUBE] 첫 실행이라 알림 없이 상태만 저장: %s", latest["title"])
             return
-
+    
         if latest["id"] == last_seen_id:
+            logger.info("[YOUTUBE] 새 영상 없음: %s", source_id)
             return
-
+    
         channel_id = int(source["discord_channel_id"])
+        logger.info("[YOUTUBE] 디스코드 채널 조회: %s", channel_id)
+    
         channel = self.bot.get_channel(channel_id)
-
+    
         if channel is None:
+            logger.info("[YOUTUBE] get_channel 실패, fetch_channel 시도: %s", channel_id)
             channel = await self.bot.fetch_channel(channel_id)
-
+    
         template = source.get(
             "message_template",
             "📺 **{source_name} 새 영상 업로드!**\n{title}\n{url}"
         )
-
+    
         message = template.format(
             source_name=source.get("name", "유튜브"),
             title=latest["title"],
             url=latest["url"],
             published=latest.get("published", ""),
         )
-
+    
+        logger.info("[YOUTUBE] 알림 전송 시도: %s", message)
+    
         await channel.send(message)
-
+    
         self.state[source_id] = {
             "last_seen_id": latest["id"],
             "last_seen_title": latest["title"],
         }
-
-        logger.info("유튜브 새 영상 알림 전송: %s", latest["title"])
+        save_json(STATE_PATH, self.state)
+    
+        logger.info("[YOUTUBE] 알림 전송 완료: %s", latest["title"])
