@@ -40,6 +40,7 @@ raw_store = RawMatchStore(SHEET_URL_DEFAULT, RAW_SHEET_GID_DEFAULT)
 data_store.load()
 raw_store.load()
 
+notifier_manager = None
 
 @bot.event
 async def on_ready():
