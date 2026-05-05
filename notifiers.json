@@ -7,7 +7,7 @@
       "type": "youtube",
       "name": "세븐나이츠 리버스 공식 유튜브",
       "handle_url": "https://www.youtube.com/@sena_rebirth",
-      "discord_channel_id": 123456789012345678,
+      "discord_channel_id": 1501082468135079987,
       "message_template": "📺 **{source_name} 새 영상 업로드!**\n{title}\n{url}"
     }
   ]
