@@ -34,6 +34,12 @@ def save_json(path: Path, data: Any) -> None:
 
 
 async def fetch_latest_youtube_video(source: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    channel_id = source.get("channel_id")
+
+    if not channel_id:
+        logger.warning("[YOUTUBE] channel_id 없음: %s", source.get("id"))
+        return None
+        
     feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
     logger.info("[YOUTUBE] feed_url=%s", feed_url)
