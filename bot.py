@@ -7,7 +7,7 @@ import os
 import traceback
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
 from common import MIN_STAT_TRIES, _canon_team_key, _join_team_disp, _split_csv_args, _badge_for_item
