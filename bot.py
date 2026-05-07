@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
@@ -383,6 +384,31 @@ async def overall_stats_cmd(ctx: commands.Context, *, args: str = ""):
     except Exception:
         logger.error("!방어 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 전체 통계 처리 중 오류가 발생했어요.", mention_author=False)
+
+# --- 게시판 관리 명령어 추가 ---
+@bot.command(name="게시판등록")
+async def register_board(ctx, board_id: str, *, board_name: str):
+    if bot.board_crawler.register(board_id, board_name, ctx.channel.id):
+        await ctx.send(
+            f"✅ [{board_name}] 게시판 알림이 등록되었습니다."
+        )
+    else:
+        await ctx.send("❌ 이미 등록된 게시판입니다.")
+
+@bot.command(name="게시판해제")
+async def unregister_board(ctx, board_id: str):
+    if bot.board_crawler.unregister(board_id):
+        await ctx.send(f"🚫 {board_id}번 게시판 알림을 해제했습니다.")
+    else:
+        await ctx.send("❌ 등록되지 않은 게시판입니다.")
+
+@bot.command(name="게시판목록")
+async def list_boards(ctx):
+    boards = bot.board_crawler.get_board_list()
+    if not boards:
+        await ctx.send("현재 등록된 게시판이 없습니다.")
+    else:
+        await ctx.send(f"📋 **현재 감시 중인 게시판 ID:** {', '.join(boards)}")
 
 
 if __name__ == "__main__":
