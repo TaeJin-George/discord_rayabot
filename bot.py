@@ -15,6 +15,7 @@ from counter_store import DataStore
 from counter_ui import CounterView, build_stats_embed
 from raw_store import RawMatchStore
 from notifier import NotifierManager
+from crawler import BoardCrawler
 
 
 logging.basicConfig(
@@ -33,6 +34,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
+bot.board_crawler = BoardCrawler()
 
 data_store = DataStore(SHEET_URL_DEFAULT)
 raw_store = RawMatchStore(SHEET_URL_DEFAULT, RAW_SHEET_GID_DEFAULT)
@@ -42,13 +44,38 @@ raw_store.load()
 
 notifier_manager = None
 
+@tasks.loop(minutes=3)
+async def check_naver_board():
+    updates = bot.board_crawler.check_new_posts()
+
+    for update in updates:
+        channel = bot.get_channel(update["channel_id"])
+
+        if not channel:
+            continue
+
+        board_name = update["board_name"]
+
+        for post in update["posts"]:
+            url = f"{bot.board_crawler.detail_url}{post['id']}"
+
+            await channel.send(
+                f"📢 **[{board_name}] 새 글이 올라왔어요!**\n"
+                f"📝 {post['title']}\n"
+                f"{url}"
+            )
+
 @bot.event
 async def on_ready():
     global notifier_manager
 
+
     if notifier_manager is None:
         notifier_manager = NotifierManager(bot)
         await notifier_manager.start()
+
+    if not check_naver_board.is_running():
+        check_naver_board.start()
     
     logger.info(f"✅ 로그인 완료: {bot.user} (guilds={len(bot.guilds)})")
     
