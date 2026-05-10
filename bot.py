@@ -12,7 +12,7 @@ import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
-from common import MIN_STAT_TRIES, _canon_team_key, _join_team_disp, _split_csv_args, _badge_for_item
+from common import _canon_team_key, _join_team_disp, _split_csv_args, _badge_for_item
 from counter_store import DataStore
 from counter_ui import CounterView, build_stats_embed
 from raw_store import RawMatchStore
@@ -390,12 +390,12 @@ async def overall_stats_cmd(ctx: commands.Context, *, args: str = ""):
 async def stat_setting(ctx, n: int = None):
     if n is None:
         await ctx.reply(
-            f"현재 최소 표본: {common.MIN_STAT_GAMES}판",
+            f"현재 최소 표본: {common.MIN_STAT_TRIES}판",
             mention_author=False
         )
         return
 
-    common.MIN_STAT_GAMES = n
+    common.MIN_STAT_TRIES = n
 
     await ctx.reply(
         f"최소 표본을 {n}판으로 변경했습니다.",
