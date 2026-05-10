@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import os
 import traceback
+import common
 
 import discord
 from discord.ext import commands, tasks
@@ -384,6 +385,22 @@ async def overall_stats_cmd(ctx: commands.Context, *, args: str = ""):
     except Exception:
         logger.error("!방어 오류:\n" + traceback.format_exc())
         await ctx.reply("⚠️ 전체 통계 처리 중 오류가 발생했어요.", mention_author=False)
+
+@bot.command(name="통계설정")
+async def stat_setting(ctx, n: int = None):
+    if n is None:
+        await ctx.reply(
+            f"현재 최소 표본: {common.MIN_STAT_GAMES}판",
+            mention_author=False
+        )
+        return
+
+    common.MIN_STAT_GAMES = n
+
+    await ctx.reply(
+        f"최소 표본을 {n}판으로 변경했습니다.",
+        mention_author=False
+    )
 
 # --- 게시판 관리 명령어 추가 ---
 @bot.command(name="게시판등록")
