@@ -159,7 +159,7 @@ async def my_winrate_cmd(ctx: commands.Context, *, args: str = ""):
 
         if not results:
             await ctx.reply(
-                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 우리 길드 기준 / {MIN_STAT_TRIES}판 이상",
+                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 우리 길드 기준 / {common.MIN_STAT_TRIES}판 이상",
                 mention_author=False
             )
             return
@@ -176,7 +176,7 @@ async def my_winrate_cmd(ctx: commands.Context, *, args: str = ""):
             title="🟢 우리 공격 승률",
             target_disp=target_disp,
             lines=lines,
-            subtitle=f"기준=공격 · 우리 길드 실전 기록 · {MIN_STAT_TRIES}판 이상",
+            subtitle=f"기준=공격 · 우리 길드 실전 기록 · {common.MIN_STAT_TRIES}판 이상",
             color=0x2ECC71,
         )
 
@@ -199,7 +199,7 @@ async def enemy_attack_winrate_cmd(ctx: commands.Context, *, args: str = ""):
 
         if not results:
             await ctx.reply(
-                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 상대 기준(기준=방어) / {MIN_STAT_TRIES}판 이상",
+                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 상대 기준(기준=방어) / {common.MIN_STAT_TRIES}판 이상",
                 mention_author=False
             )
             return
@@ -216,7 +216,7 @@ async def enemy_attack_winrate_cmd(ctx: commands.Context, *, args: str = ""):
             title="🔴 상대 공격 승률",
             target_disp=target_disp,
             lines=lines,
-            subtitle=f"기준=방어 · 상대가 사용한 공격조합 성적 · {MIN_STAT_TRIES}판 이상",
+            subtitle=f"기준=방어 · 상대가 사용한 공격조합 성적 · {common.MIN_STAT_TRIES}판 이상",
             color=0xE74C3C,
         )
 
@@ -239,7 +239,7 @@ async def global_winrate_cmd(ctx: commands.Context, *, args: str = ""):
 
         if not results:
             await ctx.reply(
-                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 전체 raw data / {MIN_STAT_TRIES}판 이상",
+                f"⚠️ 조건에 맞는 데이터 없음\n🎯 공격 조합: `{target_disp}`\n📌 전체 raw data / {common.MIN_STAT_TRIES}판 이상",
                 mention_author=False
             )
             return
@@ -256,7 +256,7 @@ async def global_winrate_cmd(ctx: commands.Context, *, args: str = ""):
             title="🔵 전체 공격 승률",
             target_disp=target_disp,
             lines=lines,
-            subtitle=f"전체 raw data 기준 · {MIN_STAT_TRIES}판 이상",
+            subtitle=f"전체 raw data 기준 · {common.MIN_STAT_TRIES}판 이상",
             color=0x3498DB,
         )
 
@@ -280,7 +280,7 @@ async def defense_stats_cmd(ctx: commands.Context, *, args: str = ""):
 
         if not results:
             await ctx.reply(
-                f"⚠️ 조건에 맞는 방어 통계가 없습니다.\n🎯 대상 조합: `{target_disp}`\n📌 기준=방어 / {MIN_STAT_TRIES}판 이상",
+                f"⚠️ 조건에 맞는 방어 통계가 없습니다.\n🎯 대상 조합: `{target_disp}`\n📌 기준=방어 / {common.MIN_STAT_TRIES}판 이상",
                 mention_author=False
             )
             return
@@ -297,7 +297,7 @@ async def defense_stats_cmd(ctx: commands.Context, *, args: str = ""):
             title="🛡️ 방어 통계",
             target_disp=target_disp,
             lines=lines,
-            subtitle=f"기준=방어 · 상대 공격조합별 방어 성공률 · {MIN_STAT_TRIES}판 이상",
+            subtitle=f"기준=방어 · 상대 공격조합별 방어 성공률 · {common.MIN_STAT_TRIES}판 이상",
             color=0x2ECC71,
         )
         await ctx.reply(embed=embed, mention_author=False)
@@ -320,7 +320,7 @@ async def attack_stats_cmd(ctx: commands.Context, *, args: str = ""):
 
         if not results:
             await ctx.reply(
-                f"⚠️ 조건에 맞는 공격 통계가 없습니다.\n🎯 대상 조합: `{target_disp}`\n📌 기준=공격 / {MIN_STAT_TRIES}판 이상",
+                f"⚠️ 조건에 맞는 공격 통계가 없습니다.\n🎯 대상 조합: `{target_disp}`\n📌 기준=공격 / {common.MIN_STAT_TRIES}판 이상",
                 mention_author=False
             )
             return
@@ -337,7 +337,7 @@ async def attack_stats_cmd(ctx: commands.Context, *, args: str = ""):
             title="⚔️ 상대 방어 통계",
             target_disp=target_disp,
             lines=lines,
-            subtitle=f"기준=공격 · 우리 공격조합별 돌파율 · {MIN_STAT_TRIES}판 이상",
+            subtitle=f"기준=공격 · 우리 공격조합별 돌파율 · {common.MIN_STAT_TRIES}판 이상",
             color=0xE67E22,
         )
         await ctx.reply(embed=embed, mention_author=False)
@@ -360,7 +360,7 @@ async def overall_stats_cmd(ctx: commands.Context, *, args: str = ""):
 
         if not results:
             await ctx.reply(
-                f"⚠️ 조건에 맞는 전체 통계가 없습니다.\n🎯 대상 조합: `{target_disp}`\n📌 전체 raw data / {MIN_STAT_TRIES}판 이상",
+                f"⚠️ 조건에 맞는 전체 통계가 없습니다.\n🎯 대상 조합: `{target_disp}`\n📌 전체 raw data / {common.MIN_STAT_TRIES}판 이상",
                 mention_author=False
             )
             return
@@ -377,7 +377,7 @@ async def overall_stats_cmd(ctx: commands.Context, *, args: str = ""):
             title="📊 전체 방어",
             target_disp=target_disp,
             lines=lines,
-            subtitle=f"전체 raw data · 공격조합별 종합 돌파율 · {MIN_STAT_TRIES}판 이상",
+            subtitle=f"전체 raw data · 공격조합별 종합 돌파율 · {common.MIN_STAT_TRIES}판 이상",
             color=0x9B59B6,
         )
         await ctx.reply(embed=embed, mention_author=False)
