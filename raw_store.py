@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from common import (
-    MIN_STAT_TRIES,
     _canon_team_key,
     _csv_url_from_sheet,
     _is_yes,
@@ -129,7 +128,7 @@ class RawMatchStore:
                 bucket[atk_key]["fail"] += 1
 
         for item in bucket.values():
-            if item["total"] < MIN_STAT_TRIES:
+            if item["total"] < common.MIN_STAT_TRIES:
                 continue
             item["rate"] = item["success"] / item["total"] if item["total"] > 0 else 0.0
             results.append(item)
@@ -176,7 +175,7 @@ class RawMatchStore:
                 bucket[def_key]["fail"] += 1
     
         for item in bucket.values():
-            if item["total"] < MIN_STAT_TRIES:
+            if item["total"] < common.MIN_STAT_TRIES:
                 continue
             item["rate"] = item["success"] / item["total"]
             results.append(item)
@@ -224,7 +223,7 @@ class RawMatchStore:
                 bucket[def_key]["fail"] += 1
     
         for item in bucket.values():
-            if item["total"] < MIN_STAT_TRIES:
+            if item["total"] < common.MIN_STAT_TRIES:
                 continue
             item["rate"] = item["success"] / item["total"]
             results.append(item)
@@ -268,7 +267,7 @@ class RawMatchStore:
                 bucket[def_key]["fail"] += 1
     
         for item in bucket.values():
-            if item["total"] < MIN_STAT_TRIES:
+            if item["total"] < common.MIN_STAT_TRIES:
                 continue
             item["rate"] = item["success"] / item["total"]
             results.append(item)
@@ -313,7 +312,7 @@ class RawMatchStore:
                 bucket[atk_key]["fail"] += 1
 
         for item in bucket.values():
-            if item["total"] < MIN_STAT_TRIES:
+            if item["total"] < common.MIN_STAT_TRIES:
                 continue
             item["rate"] = item["success"] / item["total"] if item["total"] > 0 else 0.0
             results.append(item)
@@ -356,7 +355,7 @@ class RawMatchStore:
                 bucket[atk_key]["fail"] += 1
 
         for item in bucket.values():
-            if item["total"] < MIN_STAT_TRIES:
+            if item["total"] < common.MIN_STAT_TRIES:
                 continue
             item["rate"] = item["success"] / item["total"] if item["total"] > 0 else 0.0
             results.append(item)
